@@ -118,17 +118,14 @@ class FeatureSelector:
         plt.show()
 
 if __name__ == '__main__':
-    # Example usage
-    # Assuming 'data' is a pandas DataFrame and 'target' is a pandas Series
-    train_data_path = rf'C:\Users\E4-159\Documents\GitHub\IMBD_helper\demo_datasets\playground-series-s5e3\train.csv'  # Replace with your actual data path
-    # drop id column if exists
+    train_data_path = rf'C:\Users\E4-159\Documents\GitHub\IMBD_helper\demo_datasets\playground-series-s5e3\train.csv'  
     data = pd.read_csv(train_data_path)
     if 'id' in data.columns:
         data.drop(columns=['id'], inplace=True)
     # filling missing values with 0
     data.fillna(0, inplace=True)
-    X = data.drop(columns=['rainfall'])  # Assuming 'target' is the column to predict
-    target = data['rainfall']  # Assuming 'target' is the column to predict
+    X = data.drop(columns=['rainfall']) 
+    target = data['rainfall']  
 
     feature_selector = FeatureSelector(X=X, y=target, mode='class')
     
