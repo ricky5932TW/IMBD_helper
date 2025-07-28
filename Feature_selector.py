@@ -47,9 +47,9 @@ class FeatureSelector:
         Calculate the baseline score using cross-validation.
         """
         if self.mode == 'reg':
-            self.model = xgb.XGBRegressor()
+            self.model = xgb.XGBRegressor(max_depth=3, n_estimators=500, learning_rate=0.2, random_state=42)
         else:
-            self.model = xgb.XGBClassifier()
+            self.model = xgb.XGBClassifier(max_depth=3, n_estimators=500, learning_rate=0.2, random_state=42)
 
         scores = cross_val_score(self.model, self.X, self.y, cv=10, scoring='neg_mean_squared_error' if self.mode == 'reg' else 'accuracy')
         self.base_line_scores = list(np.abs(scores))
@@ -63,9 +63,9 @@ class FeatureSelector:
         # Ensure model is initialized
         if self.model is None:
             if self.mode == 'reg':
-                self.model = xgb.XGBRegressor()
+                self.model = xgb.XGBRegressor(max_depth=3, n_estimators=500, learning_rate=0.2, random_state=42)
             else:
-                self.model = xgb.XGBClassifier()
+                self.model = xgb.XGBClassifier(max_depth=3, n_estimators=500, learning_rate=0.2, random_state=42)
 
         scores = []
         for threshold in tqdm(self.TypesofFeatures):
@@ -95,8 +95,8 @@ class FeatureSelector:
         print(f"Maximum score at threshold {self.TypesofFeatures[max_idx]}: {means[max_idx]}")
 
         plt.figure(figsize=(10, 6))
-        plt.plot(self.TypesofFeatures, means, label='Mean Score', marker='o')
-        plt.fill_between(self.TypesofFeatures, mins, maxs, alpha=0.2, label='Min-Max Range')
+        plt.plot(self.TypesofFeatures, means, label='Mean Score', marker='o', color='blue')
+        plt.fill_between(self.TypesofFeatures, mins, maxs, alpha=0.2, label='Min-Max Range', color='orange')
         
         max_score = np.min(means)
         # draw vertical lines for each  saturation percentage
