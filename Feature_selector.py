@@ -53,6 +53,7 @@ class FeatureSelector:
 
         scores = cross_val_score(self.model, self.X, self.y, cv=10, scoring='neg_mean_squared_error' if self.mode == 'reg' else 'accuracy')
         self.base_line_scores = list(np.abs(scores))
+        print(f"Mean baseline score: {np.mean(self.base_line_scores)}")
         return list(np.abs(scores))
     
     def get_scores_with_different_thresholds(self):
@@ -131,10 +132,8 @@ if __name__ == '__main__':
 
     feature_selector = FeatureSelector(X=X, y=target, mode='class')
     
-    baseline_scores = feature_selector.get_baseline()
-    print("Baseline scores:", np.mean(baseline_scores))
-
-    scores_with_thresholds = feature_selector.get_scores_with_different_thresholds()
+    _ = feature_selector.get_baseline()
+    _ = feature_selector.get_scores_with_different_thresholds()
 
 
     feature_selector.draw_scores_diagram()
