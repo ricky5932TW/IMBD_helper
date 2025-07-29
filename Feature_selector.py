@@ -22,6 +22,7 @@ class FeatureSelector:
         self.model = None
         self.base_line_scores = None
         self.thres_scores = None
+        self.best_threshold = None
 
         self.checkDtype()
 
@@ -79,6 +80,7 @@ class FeatureSelector:
             score = cross_val_score(self.model, X_selected, self.y, cv=10, scoring='neg_mean_squared_error' if self.mode == 'reg' else 'accuracy')
             scores.append(list(np.abs(score)))
         self.thres_scores = scores
+        self.best_threshold = self.TypesofFeatures[np.argmax([np.mean(score) for score in scores])]
         return scores
     
     def draw_scores_diagram(self, percentages=[0.5, 0.6, 0.9]):
@@ -117,6 +119,29 @@ class FeatureSelector:
         plt.grid() 
         plt.show()
 
+    def get_new_dataset(self):
+        """
+        Get a new dataset with features selected based on the specified threshold.
+        """
+        if self.best_threshold is None:
+            raise ValueError("Threshold scores have not been calculated. Please run get_scores_with_different_thresholds() first.")
+        
+        
+        selector = SelectFromModel(self.model, threshold=f"{self.best_threshold}*median")
+        self.selector = selector
+        X_selected = selector.fit_transform(self.X, self.y)
+        
+        # Check if any features were selected
+        if X_selected.shape[1] == 0:
+            raise ValueError(f"No features selected for threshold {self.best_threshold}. Please adjust the threshold or check your data.")
+        # print before and after shape
+        print(f"Original dataset shape: {self.X.shape}")
+        print(f"New dataset shape after feature selection: {X_selected.shape}")
+        #print column names of the new dataset
+        print(f"Selected features: {self.X.columns.tolist()}")
+        print(f"Selected features: {self.X.columns[selector.get_support()].tolist()}")
+        return pd.DataFrame(X_selected, columns=self.X.columns[selector.get_support()]), selector
+
 if __name__ == '__main__':
     train_data_path = rf'C:\Users\E4-159\Documents\GitHub\IMBD_helper\demo_datasets\playground-series-s5e3\train.csv'  
     data = pd.read_csv(train_data_path)
@@ -135,6 +160,8 @@ if __name__ == '__main__':
 
     feature_selector.draw_scores_diagram()
     print("Diagram drawn successfully.")
+
+    new_dataset, selector = feature_selector.get_new_dataset()
 
 
         
