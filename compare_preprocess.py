@@ -7,6 +7,8 @@ from sklearn.metrics import roc_auc_score , mean_squared_error, mean_absolute_er
 from sklearn.linear_model import LogisticRegression
 
 import numpy as np, pandas as pd
+from colorama import Fore, Style, init
+init(autoreset=True)
 
 class PreprocessComparison:
     def __init__(self, X, X_test, y,random_state=42):
@@ -155,7 +157,7 @@ class PreprocessComparison:
         """
         Print the AUC scores for each scaler.
         """
-        print("\nAdversarial AUC Scores:")
+        print(Fore.YELLOW+"\nAdversarial AUC Scores:")
         for scaler_name, scores in self.scaler_scores.items():
             print(f"{scaler_name}: {np.mean(scores):.4f} ± {np.std(scores):.4f}")
 

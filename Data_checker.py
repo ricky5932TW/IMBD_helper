@@ -4,6 +4,10 @@ import pandas as pd
 from sklearn.model_selection import train_test_split, RepeatedKFold
 from xgboost import XGBRegressor, XGBClassifier
 from compare_preprocess import PreprocessComparison
+from sklearn.metrics import root_mean_squared_error
+from tqdm import tqdm
+from colorama import Fore, Style, init
+init(autoreset=True)
 
 
 class DataChecker:
@@ -62,9 +66,7 @@ class DataChecker:
         if not self.cat_data or not self.num_data:
             raise ValueError("Categorical and numerical features must be identified before applying transformations.")
         
-        # Make copies to avoid modifying original data
-        self.X = self.X.copy()
-        self.X_test = self.X_test.copy()
+        
         
         # Robust scaling for numerical features
         self.robust_scaler = RobustScaler()
@@ -77,13 +79,12 @@ class DataChecker:
         self.X_test[self.num_data] = self.gaussian_transformer.transform(self.X_test[self.num_data])
         
         # Target encoding for categorical features
-        if self.cat_data:  # Only apply if there are categorical features
-            try:
-                self.target_encoding = TargetEncoder()
-                self.X[self.cat_data] = self.target_encoding.fit_transform(self.X[self.cat_data], self.y)
-                self.X_test[self.cat_data] = self.target_encoding.transform(self.X_test[self.cat_data])
-            except Exception as e:
-                print(f"Error in target encoding: {e} or not enough data for target encoding.")
+        try:
+            self.target_encoding = TargetEncoder()
+            self.X[self.cat_data] = self.target_encoding.fit_transform(self.X[self.cat_data], self.y)
+            self.X_test[self.cat_data] = self.target_encoding.transform(self.X_test[self.cat_data])
+        except Exception as e:
+            print(f"Error in target encoding: {e} or not enough data for target encoding.")
 
     def get_folds(self, n_splits=5, n_repeats=10):
 
@@ -160,7 +161,42 @@ class DataChecker:
         comparison.start_comparison()
         
         print("Comparison between training and test data completed successfully.")
-    
+
+    def __necessary_ensemble(self,scores):
+        """
+        Check if ensemble is necessary based on the scores.
+        If the average score is below a certain threshold, return True.
+        """
+        average_score = np.mean(scores)
+        threshold = 0.8  # Example threshold, adjust as needed
+        std = np.std(scores)
+        if std/ average_score > 0.05:
+            return True
+
+    def check_diversity(self):
+        """
+        Check diversity of folds.
+        """
+        # use xgboost to check diversity to check if the folds are diverse enough
+        if self.kfold is None:
+            raise ValueError("KFold splits have not been created. Please run get_folds() first.")
+        scores = []
+        for fold in tqdm(self.kfold['train_splits'][0]):
+            X_train = fold['X']
+            y_train = fold['y']
+            if self.mode == 'reg':
+                model = XGBRegressor(max_depth=3, n_estimators=100, learning_rate=0.2, random_state=42)
+            else:
+                model = XGBClassifier(max_depth=3, n_estimators=100, learning_rate=0.2, random_state=42)
+            
+            model.fit(X_train, y_train)
+            score = model.score(X_train, y_train)
+            scores.append(score)
+        if self.__necessary_ensemble(scores):
+            print(Fore.YELLOW+"Ensemble is necessary based on the diversity of folds.")
+        else:
+            print(Fore.YELLOW+"Ensemble is not necessary based on the diversity of folds.")
+        print(f"Diversity scores for folds: {scores}")
 
 if __name__ == '__main__':
     train_data_path = rf'C:\Users\E4-159\Documents\GitHub\IMBD_helper\demo_datasets\playground-series-s5e3\train.csv'  
@@ -183,3 +219,5 @@ if __name__ == '__main__':
     print("KFold splits created successfully.")
     data_checker.compare_train_and_test()
     print("Data comparison completed successfully.")
+    data_checker.check_diversity()
+    print("Diversity check completed successfully.")
