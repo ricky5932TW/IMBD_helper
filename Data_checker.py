@@ -63,28 +63,33 @@ class DataChecker:
         """
         Apply Gaussian transformation, robust scaling, and target encoding separately for categorical and numerical features.
         """
-        if not self.cat_data or not self.num_data:
+        if self.cat_data is None or self.num_data is None:
             raise ValueError("Categorical and numerical features must be identified before applying transformations.")
         
-        
-        
-        # Robust scaling for numerical features
-        self.robust_scaler = RobustScaler()
-        self.X[self.num_data] = self.robust_scaler.fit_transform(self.X[self.num_data])
-        self.X_test[self.num_data] = self.robust_scaler.transform(self.X_test[self.num_data])
+        # Apply transformations only if there are numerical features
+        if len(self.num_data) > 0:
+            # Robust scaling for numerical features
+            self.robust_scaler = RobustScaler()
+            self.X[self.num_data] = self.robust_scaler.fit_transform(self.X[self.num_data])
+            self.X_test[self.num_data] = self.robust_scaler.transform(self.X_test[self.num_data])
 
-        # Gaussian transformation for numerical features
-        self.gaussian_transformer = QuantileTransformer(output_distribution='normal')
-        self.X[self.num_data] = self.gaussian_transformer.fit_transform(self.X[self.num_data])
-        self.X_test[self.num_data] = self.gaussian_transformer.transform(self.X_test[self.num_data])
+            # Gaussian transformation for numerical features
+            self.gaussian_transformer = QuantileTransformer(output_distribution='normal')
+            self.X[self.num_data] = self.gaussian_transformer.fit_transform(self.X[self.num_data])
+            self.X_test[self.num_data] = self.gaussian_transformer.transform(self.X_test[self.num_data])
+        else:
+            print("No numerical features found, skipping numerical transformations.")
         
-        # Target encoding for categorical features
-        try:
-            self.target_encoding = TargetEncoder()
-            self.X[self.cat_data] = self.target_encoding.fit_transform(self.X[self.cat_data], self.y)
-            self.X_test[self.cat_data] = self.target_encoding.transform(self.X_test[self.cat_data])
-        except Exception as e:
-            print(f"Error in target encoding: {e} or not enough data for target encoding.")
+        # Apply target encoding only if there are categorical features
+        if len(self.cat_data) > 0:
+            try:
+                self.target_encoding = TargetEncoder()
+                self.X[self.cat_data] = self.target_encoding.fit_transform(self.X[self.cat_data], self.y)
+                self.X_test[self.cat_data] = self.target_encoding.transform(self.X_test[self.cat_data])
+            except Exception as e:
+                print(f"Error in target encoding: {e} or not enough data for target encoding.")
+        else:
+            print("No categorical features found, skipping target encoding.")
 
     def get_folds(self, n_splits=5, n_repeats=10):
 
@@ -199,20 +204,30 @@ class DataChecker:
         print(f"Diversity scores for folds: {scores}")
 
 if __name__ == '__main__':
-    train_data_path = rf'C:\Users\E4-159\Documents\GitHub\IMBD_helper\demo_datasets\playground-series-s5e3\train.csv'  
-    test_data_path = rf'C:\Users\E4-159\Documents\GitHub\IMBD_helper\demo_datasets\playground-series-s5e3\test.csv'
+    train_data_path = rf'D:\前一台\Users\ricky\Documents\imbd2021-main\data\train.csv'  
+    test_data_path = rf'D:\前一台\Users\ricky\Documents\imbd2021-main\data\test.csv'
     data = pd.read_csv(train_data_path)
-    if 'id' in data.columns:
-        data.drop(columns=['id'], inplace=True)
+    
+    # Check for missing values before fillna
+    print("Quantity of NaN in data before fillna:", data.isnull().sum().sum())
+    
     # filling missing values with 0
     data.fillna(0, inplace=True)
-    X = data.drop(columns=['rainfall']) 
-    target = data['rainfall']  
-    X_test = pd.read_csv(test_data_path)
-    X_test.fillna(0, inplace=True)
-    X_test = X_test.drop(columns=['id'], errors='ignore')  # Ensure 'id' column is dropped if present
 
-    data_checker = DataChecker(X=X, y=target, mode='class', typeofFeatures=[1,1,1,1,1,1,1,1,1,0,1], X_test=X_test)
+    X = data.drop(columns=['O', 'SeqNo'], errors='ignore')  # Ensure 'SeqNo' column is dropped if present
+
+    target = data['O']
+    
+    # Process test data
+    X_test = pd.read_csv(test_data_path)
+    X_test = X_test.drop(columns=['O', 'SeqNo'], errors='ignore')  # Ensure 'SeqNo' column is dropped if present
+    target_test = X_test['O'] if 'O' in X_test.columns else None
+    if target_test is not None:
+        X_test = X_test.drop(columns=['O'], errors='ignore')  # Drop 'O' column if it exists in test data
+    # Initialize DataChecker
+  
+    
+    data_checker = DataChecker(X=X, y=target, mode='reg', typeofFeatures=[1,1,1,1,1,1,1,1,1,1,1,1], X_test=X_test)
     data_checker.varify_data_types()
     data_checker.apply_transformations()
     kfold_splits = data_checker.get_folds(n_splits=5, n_repeats=10)
