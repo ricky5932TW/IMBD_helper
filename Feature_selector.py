@@ -97,6 +97,9 @@ class FeatureSelector:
         if self.thres_scores is None:
             raise ValueError("Threshold scores have not been calculated. Please run get_scores_with_different_thresholds() first.")
         
+        if self.base_line_scores is None:
+            raise ValueError("Baseline scores have not been calculated. Please run get_baseline() first.")
+        
         means = [np.mean(score) for score in self.thres_scores]
         maxs = [np.max(score) for score in self.thres_scores]
         mins = [np.min(score) for score in self.thres_scores]
@@ -118,7 +121,7 @@ class FeatureSelector:
             nearest_index = np.argmin(np.abs(np.array(self.TypesofFeatures) - percentage))
             plt.axvline(x=self.TypesofFeatures[nearest_index], color='r', linestyle='--', label=f'{percentage*100}% Threshold')'''
         # plot horizontal lines for baseline scores
-        plt.axhline(y=max_score, color='g', linestyle='--', label='Baseline Score')
+        plt.axhline(y=float(np.mean(self.base_line_scores)), color='g', linestyle='--', label='Baseline Score')
         plt.xlabel('Feature Selection Thresholds')
         plt.ylabel('Scores')
         plt.title('Feature Selection Scores with Different Thresholds')
