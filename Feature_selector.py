@@ -3,6 +3,7 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.feature_selection import SelectFromModel
 from sklearn.model_selection import cross_val_score
+from sklearn.preprocessing import OrdinalEncoder
 from tqdm import tqdm
 try:
     import matplotlib.pyplot as plt
@@ -10,10 +11,14 @@ try:
 except ImportError:
     print("Matplotlib or seaborn not installed. Skipping plotting functionality.")
 
+from Data_checker import DataChecker
+from torch import cuda
+
+
 class FeatureSelector:
     def __init__(self, X, y, mode, 
                  TypesofFeatures=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0], 
-                 *args, **kwargs):
+                 use_gpu=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.TypesofFeatures = TypesofFeatures
         self.X = X
@@ -23,8 +28,12 @@ class FeatureSelector:
         self.base_line_scores = None
         self.thres_scores = None
         self.best_threshold = None
+        
+        self.gpu_available = cuda.is_available() and cuda.device_count() > 0
+        self.use_gpu = use_gpu
 
         self.checkDtype()
+        self.init_model()
 
     def checkDtype(self):
         # not none
@@ -43,14 +52,17 @@ class FeatureSelector:
         if self.mode not in ['reg', 'class']:
             raise ValueError("Mode must be either 'reg' for regression or 'class' for classification.")
         
+    def init_model(self):
+        if self.mode == 'reg':
+            self.model = xgb.XGBRegressor(max_depth=3, n_estimators=500, learning_rate=0.2, random_state=42, device='gpu' if self.gpu_available and self.use_gpu else 'cpu')
+        else:
+            self.model = xgb.XGBClassifier(max_depth=3, n_estimators=500, learning_rate=0.2, random_state=42, device='gpu' if self.gpu_available and self.use_gpu else 'cpu')
+        
     def get_baseline(self):
         """
         Calculate the baseline score using cross-validation.
         """
-        if self.mode == 'reg':
-            self.model = xgb.XGBRegressor(max_depth=3, n_estimators=500, learning_rate=0.2, random_state=42)
-        else:
-            self.model = xgb.XGBClassifier(max_depth=3, n_estimators=500, learning_rate=0.2, random_state=42)
+        self.init_model()
 
         scores = cross_val_score(self.model, self.X, self.y, cv=10, scoring='neg_mean_squared_error' if self.mode == 'reg' else 'accuracy')
         self.base_line_scores = list(np.abs(scores))
@@ -61,15 +73,10 @@ class FeatureSelector:
         """
         Get scores for different feature selection thresholds.
         """
-        # Ensure model is initialized
-        if self.model is None:
-            if self.mode == 'reg':
-                self.model = xgb.XGBRegressor(max_depth=3, n_estimators=500, learning_rate=0.2, random_state=42)
-            else:
-                self.model = xgb.XGBClassifier(max_depth=3, n_estimators=500, learning_rate=0.2, random_state=42)
-
+       
         scores = []
         for threshold in tqdm(self.TypesofFeatures):
+            self.init_model()
             selector = SelectFromModel(self.model, threshold=f"{threshold}*median")
             X_selected = selector.fit_transform(self.X, self.y)
             
@@ -83,7 +90,7 @@ class FeatureSelector:
         self.best_threshold = self.TypesofFeatures[np.argmax([np.mean(score) for score in scores])]
         return scores
     
-    def draw_scores_diagram(self, percentages=[0.5, 0.6, 0.9]):
+    def draw_scores_diagram(self, percentages=[0.5, 0.6, 0.9],save=False):
         """
         Draw a diagram with mean maximum and minimum scores for different thresholds. and vertical lines for specified percentages scores.
         """
@@ -117,7 +124,10 @@ class FeatureSelector:
         plt.title('Feature Selection Scores with Different Thresholds')
         plt.legend()
         plt.grid() 
+        if save:
+            plt.savefig('feature_selection_scores.png')
         plt.show()
+        
 
     def get_new_dataset(self):
         """
@@ -143,14 +153,44 @@ class FeatureSelector:
         return pd.DataFrame(X_selected, columns=self.X.columns[selector.get_support()]), selector
 
 if __name__ == '__main__':
-    train_data_path = rf'C:\Users\E4-159\Documents\GitHub\IMBD_helper\demo_datasets\playground-series-s5e3\train.csv'  
+    train_data_path = rf'C:\Users\E4-159\Documents\GitHub\IMBD_helper\demo_datasets\playground-series-s5e8\train.csv'  
+    test_data_path = rf'C:\Users\E4-159\Documents\GitHub\IMBD_helper\demo_datasets\playground-series-s5e8\test.csv'
     data = pd.read_csv(train_data_path)
-    if 'id' in data.columns:
-        data.drop(columns=['id'], inplace=True)
+    
+    # Check for missing values before fillna
+    print("Quantity of NaN in data before fillna:", data.isnull().sum().sum())
+    
     # filling missing values with 0
     data.fillna(0, inplace=True)
-    X = data.drop(columns=['rainfall']) 
-    target = data['rainfall']  
+
+    X = data.drop(columns=['id', 'y'])
+    target = data['y']
+    # col iloc 1,2,3,4,6,7,8,10,12,13,14,15
+    X_cat = X.iloc[:, [1, 2, 3, 4, 6, 7, 8, 10, 12, 13, 14, 15]]
+    X_num = X.iloc[:, [0, 5, 9, 11]]
+
+    # ordinal encoding for categorical features
+    X_cat = X_cat.apply(lambda col: OrdinalEncoder().fit_transform(col.values.reshape(-1, 1)).flatten() if col.dtype == 'object' else col)
+    X = pd.concat([X_num, X_cat], axis=1)
+    print("Data after encoding:", X.head())
+
+    X_test = pd.read_csv(test_data_path)
+    # Remove 'id' column from test data to match training data structure
+    X_test = X_test.drop(columns=['id'])
+    X_test_cat = X_test.iloc[:, [1, 2, 3, 4, 6, 7, 8, 10, 12, 13, 14, 15]]
+    X_test_num = X_test.iloc[:, [0, 5, 9, 11]]
+    X_test_cat = X_test_cat.apply(lambda col: OrdinalEncoder().fit_transform(col.values.reshape(-1, 1)).flatten() if col.dtype == 'object' else col)
+    X_test = pd.concat([X_test_num, X_test_cat], axis=1)
+
+
+    
+    typeofFeatures_new = [1, 1, 1, 1] + [0] * 12
+    data_checker = DataChecker(X=X, y=target, mode='class', typeofFeatures=typeofFeatures_new, X_test=X_test)
+    data_checker.varify_data_types()
+    data_checker.apply_transformations()
+    X = data_checker.X
+
+    
 
     feature_selector = FeatureSelector(X=X, y=target, mode='class')
     
@@ -158,7 +198,7 @@ if __name__ == '__main__':
     _ = feature_selector.get_scores_with_different_thresholds()
 
 
-    feature_selector.draw_scores_diagram()
+    feature_selector.draw_scores_diagram(save=True)
     print("Diagram drawn successfully.")
 
     new_dataset, selector = feature_selector.get_new_dataset()

@@ -8,9 +8,14 @@ from sklearn.metrics import root_mean_squared_error
 from tqdm import tqdm
 from colorama import Fore, Style, init
 init(autoreset=True)
+from sklearn.preprocessing import OrdinalEncoder
 
 
 class DataChecker:
+    """
+    A class to check and preprocess data for machine learning tasks.
+    It verifies data types, applies transformations, and checks for diversity in folds.
+    """
     def __init__(self, X, y, X_test, mode='reg',typeofFeatures=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -197,6 +202,8 @@ class DataChecker:
             model.fit(X_train, y_train)
             score = model.score(X_train, y_train)
             scores.append(score)
+        
+        print(Fore.YELLOW+rf'Average diversity score across folds: {np.mean(scores):.4f} ± {np.std(scores):.4f}')
         if self.__necessary_ensemble(scores):
             print(Fore.YELLOW+"Ensemble is necessary based on the diversity of folds.")
         else:
@@ -204,8 +211,8 @@ class DataChecker:
         print(f"Diversity scores for folds: {scores}")
 
 if __name__ == '__main__':
-    train_data_path = rf'D:\前一台\Users\ricky\Documents\imbd2021-main\data\train.csv'  
-    test_data_path = rf'D:\前一台\Users\ricky\Documents\imbd2021-main\data\test.csv'
+    train_data_path = rf'C:\Users\E4-159\Documents\GitHub\IMBD_helper\demo_datasets\playground-series-s5e8\train.csv'  
+    test_data_path = rf'C:\Users\E4-159\Documents\GitHub\IMBD_helper\demo_datasets\playground-series-s5e8\test.csv'
     data = pd.read_csv(train_data_path)
     
     # Check for missing values before fillna
@@ -214,20 +221,30 @@ if __name__ == '__main__':
     # filling missing values with 0
     data.fillna(0, inplace=True)
 
-    X = data.drop(columns=['O', 'SeqNo'], errors='ignore')  # Ensure 'SeqNo' column is dropped if present
+    X = data.drop(columns=['id', 'y'])
+    target = data['y']
+    # col iloc 1,2,3,4,6,7,8,10,12,13,14,15
+    X_cat = X.iloc[:, [1, 2, 3, 4, 6, 7, 8, 10, 12, 13, 14, 15]]
+    X_num = X.iloc[:, [0, 5, 9, 11]]
 
-    target = data['O']
-    
-    # Process test data
+    # ordinal encoding for categorical features
+    X_cat = X_cat.apply(lambda col: OrdinalEncoder().fit_transform(col.values.reshape(-1, 1)).flatten() if col.dtype == 'object' else col)
+    X = pd.concat([X_num, X_cat], axis=1)
+    print("Data after encoding:", X.head())
+
     X_test = pd.read_csv(test_data_path)
-    X_test = X_test.drop(columns=['O', 'SeqNo'], errors='ignore')  # Ensure 'SeqNo' column is dropped if present
-    target_test = X_test['O'] if 'O' in X_test.columns else None
-    if target_test is not None:
-        X_test = X_test.drop(columns=['O'], errors='ignore')  # Drop 'O' column if it exists in test data
-    # Initialize DataChecker
-  
+    # Remove 'id' column from test data to match training data structure
+    X_test = X_test.drop(columns=['id'])
+    X_test_cat = X_test.iloc[:, [1, 2, 3, 4, 6, 7, 8, 10, 12, 13, 14, 15]]
+    X_test_num = X_test.iloc[:, [0, 5, 9, 11]]
+    X_test_cat = X_test_cat.apply(lambda col: OrdinalEncoder().fit_transform(col.values.reshape(-1, 1)).flatten() if col.dtype == 'object' else col)
+    X_test = pd.concat([X_test_num, X_test_cat], axis=1)
+
+
     
-    data_checker = DataChecker(X=X, y=target, mode='reg', typeofFeatures=[1,1,1,1,1,1,1,1,1,1,1,1], X_test=X_test)
+    typeofFeatures_new = [1, 1, 1, 1] + [0] * 12
+
+    data_checker = DataChecker(X=X, y=target, mode='class', typeofFeatures=typeofFeatures_new, X_test=X_test)
     data_checker.varify_data_types()
     data_checker.apply_transformations()
     kfold_splits = data_checker.get_folds(n_splits=5, n_repeats=10)
