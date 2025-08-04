@@ -195,9 +195,9 @@ class DataChecker:
             X_train = fold['X']
             y_train = fold['y']
             if self.mode == 'reg':
-                model = XGBRegressor(max_depth=3, n_estimators=100, learning_rate=0.2, random_state=42)
+                model = XGBRegressor(max_depth=5, n_estimators=500, learning_rate=0.1, random_state=42)
             else:
-                model = XGBClassifier(max_depth=3, n_estimators=100, learning_rate=0.2, random_state=42)
+                model = XGBClassifier(max_depth=5, n_estimators=500, learning_rate=0.1, random_state=42)
             
             model.fit(X_train, y_train)
             score = model.score(X_train, y_train)

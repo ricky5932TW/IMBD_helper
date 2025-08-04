@@ -17,7 +17,7 @@ from torch import cuda
 
 class FeatureSelector:
     def __init__(self, X, y, mode, 
-                 TypesofFeatures=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0], 
+                 TypesofFeatures=[i for i in np.arange(0.1, 5, 0.1)],
                  use_gpu=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.TypesofFeatures = TypesofFeatures
@@ -54,9 +54,9 @@ class FeatureSelector:
         
     def init_model(self):
         if self.mode == 'reg':
-            self.model = xgb.XGBRegressor(max_depth=3, n_estimators=500, learning_rate=0.2, random_state=42, device='gpu' if self.gpu_available and self.use_gpu else 'cpu')
+            self.model = xgb.XGBRegressor(max_depth=5, n_estimators=500, learning_rate=0.2, random_state=42, device='gpu' if self.gpu_available and self.use_gpu else 'cpu')
         else:
-            self.model = xgb.XGBClassifier(max_depth=3, n_estimators=500, learning_rate=0.2, random_state=42, device='gpu' if self.gpu_available and self.use_gpu else 'cpu')
+            self.model = xgb.XGBClassifier(max_depth=5, n_estimators=500, learning_rate=0.2, random_state=42, device='gpu' if self.gpu_available and self.use_gpu else 'cpu')
         
     def get_baseline(self):
         """
@@ -87,7 +87,10 @@ class FeatureSelector:
             score = cross_val_score(self.model, X_selected, self.y, cv=10, scoring='neg_mean_squared_error' if self.mode == 'reg' else 'accuracy')
             scores.append(list(np.abs(score)))
         self.thres_scores = scores
-        self.best_threshold = self.TypesofFeatures[np.argmax([np.mean(score) for score in scores])]
+        if self.mode == 'class':
+            self.best_threshold = self.TypesofFeatures[np.argmax([np.mean(score) for score in scores])]
+        else:
+            self.best_threshold = self.TypesofFeatures[np.argmin([np.mean(score) for score in scores])]
         return scores
     
     def draw_scores_diagram(self, percentages=[0.5, 0.6, 0.9],save=False):
@@ -103,7 +106,10 @@ class FeatureSelector:
         means = [np.mean(score) for score in self.thres_scores]
         maxs = [np.max(score) for score in self.thres_scores]
         mins = [np.min(score) for score in self.thres_scores]
-        max_idx = np.argmax(means)
+        if self.mode == 'class':
+            max_idx = np.argmax(means)
+        else:
+            max_idx = np.argmin(means)
         print(f"Maximum score at threshold {self.TypesofFeatures[max_idx]}: {means[max_idx]}")
 
         plt.figure(figsize=(10, 6))
@@ -124,7 +130,10 @@ class FeatureSelector:
         plt.axhline(y=float(np.mean(self.base_line_scores)), color='g', linestyle='--', label='Baseline Score')
         plt.xlabel('Feature Selection Thresholds')
         plt.ylabel('Scores')
-        plt.title('Feature Selection Scores with Different Thresholds')
+        if self.mode == 'reg':
+            plt.title('Feature Selection Scores for Regression(smaller is better)')
+        else:
+            plt.title('Feature Selection Scores for Classification (higher is better)')
         plt.legend()
         plt.grid() 
         if save:
@@ -192,6 +201,7 @@ if __name__ == '__main__':
     data_checker.varify_data_types()
     data_checker.apply_transformations()
     X = data_checker.X
+    print("Transformed data:", X.head())
 
     
 
@@ -205,6 +215,7 @@ if __name__ == '__main__':
     print("Diagram drawn successfully.")
 
     new_dataset, selector = feature_selector.get_new_dataset()
+    new_dataset_test = selector.transform(data_checker.X_test)
 
 
         
