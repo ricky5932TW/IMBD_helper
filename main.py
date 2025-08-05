@@ -105,3 +105,5 @@ if __name__ == '__main__':
 
 
     get_models_base_scores(splited_data['train_splits'], splited_data['valid_splits'])
+
+    get_residual_correlation(splited_data['train_splits'], splited_data['valid_splits'], draw_diagram=True)
