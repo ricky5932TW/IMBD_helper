@@ -1,8 +1,13 @@
 from Data_checker import DataChecker
 import pandas as pd
+import numpy as np
+import pickle
 from sklearn.preprocessing import OrdinalEncoder
 from Feature_selector import FeatureSelector
 from L1_model_zoo import *
+import os
+os.environ["LOKY_MAX_CPU_COUNT"] = "12"  # 限制最多使用 4 個核心
+
 
 if __name__ == '__main__':
     """
@@ -35,57 +40,36 @@ if __name__ == '__main__':
     X_test_cat = X_test_cat.apply(lambda col: OrdinalEncoder().fit_transform(col.values.reshape(-1, 1)).flatten() if col.dtype == 'object' else col)
     X_test = pd.concat([X_test_num, X_test_cat], axis=1)
     """
-    all_train_data = pd.read_csv('C:/Users/E4-159/Documents/py_surr/imbd2022-main/training.csv')
-    all_test_data = pd.read_csv('C:/Users/E4-159/Documents/py_surr/imbd2022-main/testing.csv')
-    X = all_train_data.drop(columns=['sensor_point5_i_value', 'sensor_point6_i_value','sensor_point7_i_value','sensor_point8_i_value','sensor_point9_i_value','sensor_point10_i_value'], axis=1)
-    y = all_train_data[['sensor_point5_i_value', 'sensor_point6_i_value','sensor_point7_i_value','sensor_point8_i_value','sensor_point9_i_value','sensor_point10_i_value']]
-    X_test = all_test_data.drop(columns=['update_time', 'create_time'], axis=1)
-    y_test = pd.read_csv('C:/Users/E4-159/Documents/py_surr/imbd2022-main/testing_ans.csv')
+    all_train_data = pd.read_csv(rf'C:\Users\E4-159\Documents\py_surr\imbd2025\初\final_combined_data.csv')
+    # drop Disp. X and Disp. Z columns for y
+    X = all_train_data.drop(columns=['Time','Disp. X', 'Disp. Z','日期'])
+    y_x = all_train_data['Disp. X']
+    y_z = all_train_data['Disp. Z']
     
-    # Create Series instead of DataFrame for targets (use single brackets)
-    y0 = y['sensor_point5_i_value']  # Series instead of DataFrame
-    y1 = y['sensor_point6_i_value']
-    y2 = y['sensor_point7_i_value'] 
-    y3 = y['sensor_point8_i_value']
-    y4 = y['sensor_point9_i_value']
-    y5 = y['sensor_point10_i_value']
-
-    y_test_0 = y_test['sensor_point5_i_value']  # Series instead of DataFrame
-
-    #fillna with 0
-    X.fillna(0, inplace=True)
-    # fillna with 0 in test data
-    X_test.fillna(0, inplace=True)
-    
-    # Also fill null values in target variables (now they are Series)
-    y0 = y0.fillna(0)
-    y1 = y1.fillna(0) 
-    y2 = y2.fillna(0)
-    y3 = y3.fillna(0)
-    y4 = y4.fillna(0)
-    y5 = y5.fillna(0)
-    
-    # Check for any remaining null values
-    print("Null values in X:", X.isnull().sum().sum())
-    print("Null values in X_test:", X_test.isnull().sum().sum())
-    print("Null values in y0:", y0.isnull().sum())
-
+ 
     # x size
     print("X shape:", X.shape)
+    print("Number of features:", X.shape[1])
     
-    typeofFeatures_new = [1] * 125
-    data_checker = DataChecker(X=X, y=y0, mode='reg', typeofFeatures=typeofFeatures_new, X_test=X_test)
+    # Create typeofFeatures to match the number of features
+    # Assuming first 25 are numerical and remaining are categorical
+    typeofFeatures_new = [1] * 24 + [0] * (X.shape[1] - 24)
+    
+    # Create a test dataset with the same structure as X (DataFrame) instead of numpy array
+    X_test_dummy = pd.DataFrame(np.zeros((X.shape[0], X.shape[1])), columns=X.columns)
+    
+    data_checker = DataChecker(X=X, y=y_x, mode='reg', typeofFeatures=typeofFeatures_new, X_test=X_test_dummy)
     data_checker.varify_data_types()
-    data_checker.apply_transformations()
+    data_checker.apply_transformations(use_target_encoder=0)  # Use False to skip Target Encoding for now
     kfold_splits = data_checker.get_folds(n_splits=5, n_repeats=10)
     print("KFold splits created successfully.")
-    data_checker.compare_train_and_test()
+    #data_checker.compare_train_and_test()
     print("Data comparison completed successfully.")
-    data_checker.check_diversity()
+    #data_checker.check_diversity()
     print("Diversity check completed successfully.")
 
     # Use y0 (first target column) for feature selection instead of undefined 'target'
-    feature_selector = FeatureSelector(X=X, y=y0, mode='reg', use_gpu=True)
+    feature_selector = FeatureSelector(X=X, y=y_x, mode='reg', use_gpu=True)
     
     _ = feature_selector.get_baseline()
     _ = feature_selector.get_scores_with_different_thresholds()
@@ -95,12 +79,30 @@ if __name__ == '__main__':
     print("Diagram drawn successfully.")
 
     new_dataset, selector = feature_selector.get_new_dataset()
-    new_dataset_test = selector.transform(data_checker.X_test)
-
+    #selected features
+    selected_features = new_dataset.columns.tolist()
     # turn to new dataset into Datachecker and split into train and test
     data_checker.X = new_dataset
-    data_checker.X_test = new_dataset_test
     splited_data = data_checker.get_folds(n_splits=5, n_repeats=10)
+    X_test_dummy = pd.DataFrame(np.zeros((new_dataset.shape[0], new_dataset.shape[1])), columns=new_dataset.columns)
+    feature_types = {
+    # 數值型
+    'PT01': 1, 'PT02': 1, 'PT03': 1, 'PT04': 1, 'PT05': 1, 'PT06': 1, 'PT07': 1, 'PT08': 1, 'PT09': 1, 'PT10': 1,
+    'PT11': 1, 'PT12': 1, 'PT13': 1, 'TC01': 1, 'TC02': 1, 'TC03': 1, 'TC04': 1, 'TC05': 1, 'TC06': 1, 'TC07': 1, 'TC08': 1,
+    'Spindle Motor': 1, 'X Motor': 1, 'Z Motor': 1,
+    # 類別型
+    '轉速 (rpm)': 0, '進給 (mm/min)': 0, '時間 (Hr)': 0,
+    '轉速 (rpm).1': 0, '進給 (mm/min).1': 0, '時間 (Hr).1': 0,
+    '轉速 (rpm).2': 0, '進給 (mm/min).2': 0, '時間 (Hr).2': 0,
+    '控溫': 0, '溫度': 0
+    }
+    selected_data_checker = DataChecker(X=new_dataset, y=y_x, mode='reg', typeofFeatures=[feature_types[feat] for feat in selected_features], X_test=X_test_dummy)
+    selected_data_checker.varify_data_types()
+    selected_data_checker.apply_transformations(use_target_encoder=0)  # Use False to skip Target
+    splited_data = selected_data_checker.get_folds(n_splits=5, n_repeats=10)
+    # save folds to a pickle file
+    with open('train_splits.pkl', 'wb') as f:
+        pickle.dump(splited_data, f)
     print("New dataset created and split successfully.")
 
 

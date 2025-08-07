@@ -16,8 +16,8 @@ class DataChecker:
     A class to check and preprocess data for machine learning tasks.
     It verifies data types, applies transformations, and checks for diversity in folds.
     """
-    def __init__(self, X, y, X_test, mode='reg',typeofFeatures=None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, X, y, X_test, mode='reg',typeofFeatures=None):
+        # Remove the super().__init__() call since DataChecker doesn't inherit from any specific class
 
         self.X = X
         self.y = y
@@ -32,6 +32,10 @@ class DataChecker:
         self.fold_diversity = None
         self.cat_data = None
         self.num_data = None
+
+        self.scalers = []
+        self.transformers = []
+        self.target_encoders = []
 
         self.checkDtype()
 
@@ -64,15 +68,15 @@ class DataChecker:
         print(f"Numerical features: {self.num_data}")
         return self.cat_data, self.num_data
     
-    def apply_transformations(self):
+    def apply_transformations(self, use_target_encoder=False):
         """
         Apply Gaussian transformation, robust scaling, and target encoding separately for categorical and numerical features.
         """
-        if self.cat_data is None or self.num_data is None:
+        if self.cat_data is None or self.num_data is None :
             raise ValueError("Categorical and numerical features must be identified before applying transformations.")
         
         # Apply transformations only if there are numerical features
-        if len(self.num_data) > 0:
+        if len(self.num_data) > 0 and False:
             # Robust scaling for numerical features
             self.robust_scaler = RobustScaler()
             self.X[self.num_data] = self.robust_scaler.fit_transform(self.X[self.num_data])
@@ -86,7 +90,7 @@ class DataChecker:
             print("No numerical features found, skipping numerical transformations.")
         
         # Apply target encoding only if there are categorical features
-        if len(self.cat_data) > 0:
+        if len(self.cat_data) > 0 and use_target_encoder and False:
             try:
                 self.target_encoding = TargetEncoder()
                 self.X[self.cat_data] = self.target_encoding.fit_transform(self.X[self.cat_data], self.y)
@@ -96,51 +100,127 @@ class DataChecker:
         else:
             print("No categorical features found, skipping target encoding.")
 
-    def get_folds(self, n_splits=5, n_repeats=10):
+    def get_folds(self, n_splits=5, n_repeats=10, control_scaler=True, control_gaussian=True, control_targetencoder=True):
+
+
+        # 根據 typeofFeatures 分辨數值型與類別型
+        if self.typeofFeatures is None:
+            raise ValueError("typeofFeatures must be provided to verify data types.")
+        if len(self.typeofFeatures) != len(self.X.columns):
+            raise ValueError("Length of typeofFeatures must match the number of columns in X.")
+        num_cols = [col for col, typ in zip(self.X.columns, self.typeofFeatures) if typ == 1]
+        cat_cols = [col for col, typ in zip(self.X.columns, self.typeofFeatures) if typ == 0]
+
+        # 用來存所有 fold/scaler/encoder
+        self.folds_scalers = []
+        self.folds_gaussians = []
+        self.folds_encoders = []
+        self.cv_scaler = None
+        self.cv_gaussian = None
+        self.cv_encoder = None
 
         def get_repeated_kfold_splits_with_holdout(X, y, n_splits=5, n_repeats=10, holdout_size=0.1, random_state=42):
             """
-            Get Repeated KFold splits with true holdout set for regression problem
+            Get Repeated KFold splits with true holdout set for regression/classification problem
             """
             # First split: separate holdout set
             X_train_cv, X_holdout, y_train_cv, y_holdout = train_test_split(
                 X, y, test_size=holdout_size, random_state=random_state, stratify=None
             )
-            
+
+
+            # 數值型特徵先 RobustScaler 再 Gaussian Rank (QuantileTransformer)
+            scaler = None
+            gaussian = None
+            if len(num_cols) > 0:
+                if control_scaler:
+                    scaler = RobustScaler()
+                    X_train_cv[num_cols] = scaler.fit_transform(X_train_cv[num_cols])
+                    X_holdout[num_cols] = scaler.transform(X_holdout[num_cols])
+                if control_gaussian:
+                    gaussian = QuantileTransformer(output_distribution='normal')
+                    X_train_cv[num_cols] = gaussian.fit_transform(X_train_cv[num_cols])
+                    X_holdout[num_cols] = gaussian.transform(X_holdout[num_cols])
+            # 存進 self
+            self.cv_scaler = scaler
+            self.cv_gaussian = gaussian
+
+            # 類別型特徵做 TargetEncoder
+            encoder = None
+            if len(cat_cols) > 0 and control_targetencoder:
+                try:
+                    encoder = TargetEncoder()
+                    X_train_cv[cat_cols] = encoder.fit_transform(X_train_cv[cat_cols], y_train_cv)
+                    X_holdout[cat_cols] = encoder.transform(X_holdout[cat_cols])
+                except Exception as e:
+                    print(f"Error in target encoding: {e}")
+            self.cv_encoder = encoder
+
             # Create RepeatedKFold on the remaining data
             rkf = RepeatedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=random_state)
-            
+
             train_splits = []
             valid_splits = []
-            
+
+
             for train_idx, valid_idx in rkf.split(X_train_cv):
+                X_train_fold = X_train_cv.iloc[train_idx].copy()
+                X_valid_fold = X_train_cv.iloc[valid_idx].copy()
+                y_train_fold = y_train_cv.iloc[train_idx] if isinstance(y_train_cv, pd.DataFrame) else y_train_cv.iloc[train_idx]
+                y_valid_fold = y_train_cv.iloc[valid_idx] if isinstance(y_train_cv, pd.DataFrame) else y_train_cv.iloc[valid_idx]
+
+                scaler_fold = None
+                gaussian_fold = None
+                encoder_fold = None
+                # fold 內也做 RobustScaler + Gaussian Rank
+                if len(num_cols) > 0:
+                    if control_scaler:
+                        scaler_fold = RobustScaler()
+                        X_train_fold[num_cols] = scaler_fold.fit_transform(X_train_fold[num_cols])
+                        X_valid_fold[num_cols] = scaler_fold.transform(X_valid_fold[num_cols])
+                    if control_gaussian:
+                        gaussian_fold = QuantileTransformer(output_distribution='normal')
+                        X_train_fold[num_cols] = gaussian_fold.fit_transform(X_train_fold[num_cols])
+                        X_valid_fold[num_cols] = gaussian_fold.transform(X_valid_fold[num_cols])
+                if len(cat_cols) > 0 and control_targetencoder:
+                    try:
+                        encoder_fold = TargetEncoder()
+                        X_train_fold[cat_cols] = encoder_fold.fit_transform(X_train_fold[cat_cols], y_train_fold)
+                        X_valid_fold[cat_cols] = encoder_fold.transform(X_valid_fold[cat_cols])
+                    except Exception as e:
+                        print(f"Error in fold target encoding: {e}")
+
+                # 存進 self
+                self.folds_scalers.append(scaler_fold)
+                self.folds_gaussians.append(gaussian_fold)
+                self.folds_encoders.append(encoder_fold)
+
                 train_split = {
-                    'X': X_train_cv.iloc[train_idx],
-                    'y': y_train_cv.iloc[train_idx] if isinstance(y_train_cv, pd.DataFrame) else y_train_cv.iloc[train_idx]
+                    'X': X_train_fold,
+                    'y': y_train_fold
                 }
                 valid_split = {
-                    'X': X_train_cv.iloc[valid_idx],
-                    'y': y_train_cv.iloc[valid_idx] if isinstance(y_train_cv, pd.DataFrame) else y_train_cv.iloc[valid_idx]
+                    'X': X_valid_fold,
+                    'y': y_valid_fold
                 }
                 train_splits.append(train_split)
                 valid_splits.append(valid_split)
-            
+
             # Create holdout split
             holdout_split = {
                 'X': X_holdout,
                 'y': y_holdout
             }
-            
+
             return train_splits, valid_splits, holdout_split
-        
+
         # Create Repeated KFold splits with holdout for each target variable
         train_splits_of_splitters = []
         valid_splits_of_splitters = []
         holdout_splits = []
 
-
         train_splits, valid_splits, holdout_split = get_repeated_kfold_splits_with_holdout(
-            self.X, self.y, n_splits=n_splits, n_repeats=n_repeats, holdout_size=0.1, random_state=42
+            self.X.copy(), self.y.copy(), n_splits=n_splits, n_repeats=n_repeats, holdout_size=0.1, random_state=42
         )
         train_splits_of_splitters.append(train_splits)
         valid_splits_of_splitters.append(valid_splits)

@@ -54,18 +54,18 @@ class FeatureSelector:
         
     def init_model(self):
         if self.mode == 'reg':
-            self.model = xgb.XGBRegressor(max_depth=5, n_estimators=500, learning_rate=0.2, random_state=42, device='gpu' if self.gpu_available and self.use_gpu else 'cpu')
+            self.model = xgb.XGBRegressor(device='gpu' if self.gpu_available and self.use_gpu else 'cpu')
         else:
-            self.model = xgb.XGBClassifier(max_depth=5, n_estimators=500, learning_rate=0.2, random_state=42, device='gpu' if self.gpu_available and self.use_gpu else 'cpu')
+            self.model = xgb.XGBClassifier(device='gpu' if self.gpu_available and self.use_gpu else 'cpu')
         
     def get_baseline(self):
         """
         Calculate the baseline score using cross-validation.
         """
         self.init_model()
-
-        scores = cross_val_score(self.model, self.X, self.y, cv=10, scoring='neg_mean_squared_error' if self.mode == 'reg' else 'accuracy')
-        self.base_line_scores = list(np.abs(scores))
+        # rmse
+        scores = cross_val_score(self.model, self.X, self.y, cv=10, scoring='neg_root_mean_squared_error' if self.mode == 'reg' else 'accuracy')
+        self.base_line_scores = list(np.abs(scores)) if self.mode == 'reg' else list(np.abs(scores))
         print(f"Mean baseline score: {np.mean(self.base_line_scores)}")
         return list(np.abs(scores))
     
@@ -85,7 +85,7 @@ class FeatureSelector:
                 raise ValueError(f"No features selected for threshold {threshold}. Please adjust the threshold or check your data.")
             
             score = cross_val_score(self.model, X_selected, self.y, cv=10, scoring='neg_mean_squared_error' if self.mode == 'reg' else 'accuracy')
-            scores.append(list(np.abs(score)))
+            scores.append(list(np.sqrt(np.abs(score))) if self.mode == 'reg' else list(np.abs(score)))
         self.thres_scores = scores
         if self.mode == 'class':
             self.best_threshold = self.TypesofFeatures[np.argmax([np.mean(score) for score in scores])]
