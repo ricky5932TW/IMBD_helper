@@ -197,11 +197,17 @@ class DataChecker:
 
                 train_split = {
                     'X': X_train_fold,
-                    'y': y_train_fold
+                    'y': y_train_fold,
+                    'scaler': scaler_fold,
+                    'gaussian': gaussian_fold,
+                    'encoder': encoder_fold
                 }
                 valid_split = {
                     'X': X_valid_fold,
-                    'y': y_valid_fold
+                    'y': y_valid_fold,
+                    'scaler': scaler_fold,
+                    'gaussian': gaussian_fold,
+                    'encoder': encoder_fold
                 }
                 train_splits.append(train_split)
                 valid_splits.append(valid_split)
@@ -209,7 +215,10 @@ class DataChecker:
             # Create holdout split
             holdout_split = {
                 'X': X_holdout,
-                'y': y_holdout
+                'y': y_holdout,
+                'scaler': scaler,
+                'gaussian': gaussian,
+                'encoder': encoder
             }
 
             return train_splits, valid_splits, holdout_split

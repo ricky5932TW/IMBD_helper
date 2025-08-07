@@ -60,8 +60,8 @@ if __name__ == '__main__':
     
     data_checker = DataChecker(X=X, y=y_x, mode='reg', typeofFeatures=typeofFeatures_new, X_test=X_test_dummy)
     data_checker.varify_data_types()
-    data_checker.apply_transformations(use_target_encoder=0)  # Use False to skip Target Encoding for now
-    kfold_splits = data_checker.get_folds(n_splits=5, n_repeats=10)
+    data_checker.apply_transformations(use_target_encoder=False)  # Use False to skip Target Encoding for now
+    kfold_splits = data_checker.get_folds(n_splits=5, n_repeats=10)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
     print("KFold splits created successfully.")
     #data_checker.compare_train_and_test()
     print("Data comparison completed successfully.")
@@ -80,25 +80,24 @@ if __name__ == '__main__':
 
     new_dataset, selector = feature_selector.get_new_dataset()
     #selected features
-    selected_features = new_dataset.columns.tolist()
-    # turn to new dataset into Datachecker and split into train and test
-    data_checker.X = new_dataset
-    splited_data = data_checker.get_folds(n_splits=5, n_repeats=10)
+
     X_test_dummy = pd.DataFrame(np.zeros((new_dataset.shape[0], new_dataset.shape[1])), columns=new_dataset.columns)
     feature_types = {
-    # 數值型
-    'PT01': 1, 'PT02': 1, 'PT03': 1, 'PT04': 1, 'PT05': 1, 'PT06': 1, 'PT07': 1, 'PT08': 1, 'PT09': 1, 'PT10': 1,
-    'PT11': 1, 'PT12': 1, 'PT13': 1, 'TC01': 1, 'TC02': 1, 'TC03': 1, 'TC04': 1, 'TC05': 1, 'TC06': 1, 'TC07': 1, 'TC08': 1,
-    'Spindle Motor': 1, 'X Motor': 1, 'Z Motor': 1,
-    # 類別型
-    '轉速 (rpm)': 0, '進給 (mm/min)': 0, '時間 (Hr)': 0,
-    '轉速 (rpm).1': 0, '進給 (mm/min).1': 0, '時間 (Hr).1': 0,
-    '轉速 (rpm).2': 0, '進給 (mm/min).2': 0, '時間 (Hr).2': 0,
-    '控溫': 0, '溫度': 0
+        # 數值型
+        'PT01': 1, 'PT02': 1, 'PT03': 1, 'PT04': 1, 'PT05': 1, 'PT06': 1, 'PT07': 1, 'PT08': 1, 'PT09': 1, 'PT10': 1,
+        'PT11': 1, 'PT12': 1, 'PT13': 1, 'TC01': 1, 'TC02': 1, 'TC03': 1, 'TC04': 1, 'TC05': 1, 'TC06': 1, 'TC07': 1, 'TC08': 1,
+        'Spindle Motor': 1, 'X Motor': 1, 'Z Motor': 1,
+        # 類別型
+        '轉速 (rpm)': 0, '進給 (mm/min)': 0, '時間 (Hr)': 0,
+        '轉速 (rpm).1': 0, '進給 (mm/min).1': 0, '時間 (Hr).1': 0,
+        '轉速 (rpm).2': 0, '進給 (mm/min).2': 0, '時間 (Hr).2': 0,
+        '控溫': 0, '溫度': 0
     }
-    selected_data_checker = DataChecker(X=new_dataset, y=y_x, mode='reg', typeofFeatures=[feature_types[feat] for feat in selected_features], X_test=X_test_dummy)
+    # typeofFeatures 直接用 new_dataset.columns
+    typeofFeatures_new = [feature_types.get(col, 1) for col in new_dataset.columns]
+    selected_data_checker = DataChecker(X=new_dataset, y=y_x, mode='reg', typeofFeatures=typeofFeatures_new, X_test=X_test_dummy)
     selected_data_checker.varify_data_types()
-    selected_data_checker.apply_transformations(use_target_encoder=0)  # Use False to skip Target
+    selected_data_checker.apply_transformations(use_target_encoder=False)  # Use False to skip Target
     splited_data = selected_data_checker.get_folds(n_splits=5, n_repeats=10)
     # save folds to a pickle file
     with open('train_splits.pkl', 'wb') as f:
