@@ -10,50 +10,42 @@ os.environ["LOKY_MAX_CPU_COUNT"] = "12"  # 限制最多使用 4 個核心
 
 
 if __name__ == '__main__':
-    """
-    train_data_path = 'C:/Users/E4-159/Documents/GitHub/IMBD_helper/demo_datasets/playground-series-s5e8/train.csv'  
-    test_data_path = 'C:/Users/E4-159/Documents/GitHub/IMBD_helper/demo_datasets/playground-series-s5e8/test.csv'
-    data = pd.read_csv(train_data_path)
-    
-    # Check for missing values before fillna
-    print("Quantity of NaN in data before fillna:", data.isnull().sum().sum())
-    
-    # filling missing values with 0
-    data.fillna(0, inplace=True)
 
-    X = data.drop(columns=['id', 'y'])
-    target = data['y']
-    # col iloc 1,2,3,4,6,7,8,10,12,13,14,15
-    X_cat = X.iloc[:, [1, 2, 3, 4, 6, 7, 8, 10, 12, 13, 14, 15]]
-    X_num = X.iloc[:, [0, 5, 9, 11]]
-
-    # ordinal encoding for categorical features
-    X_cat = X_cat.apply(lambda col: OrdinalEncoder().fit_transform(col.values.reshape(-1, 1)).flatten() if col.dtype == 'object' else col)
-    X = pd.concat([X_num, X_cat], axis=1)
-    print("Data after encoding:", X.head())
-
-    X_test = pd.read_csv(test_data_path)
-    # Remove 'id' column from test data to match training data structure
-    X_test = X_test.drop(columns=['id'])
-    X_test_cat = X_test.iloc[:, [1, 2, 3, 4, 6, 7, 8, 10, 12, 13, 14, 15]]
-    X_test_num = X_test.iloc[:, [0, 5, 9, 11]]
-    X_test_cat = X_test_cat.apply(lambda col: OrdinalEncoder().fit_transform(col.values.reshape(-1, 1)).flatten() if col.dtype == 'object' else col)
-    X_test = pd.concat([X_test_num, X_test_cat], axis=1)
-    """
-    all_train_data = pd.read_csv(rf'C:\Users\E4-159\Documents\py_surr\imbd2025\初\final_dataset_with_statics.csv')
+    all_train_data = pd.read_csv(rf'C:\Users\E4-159\Documents\py_surr\imbd2025\初\final_combined_data.csv')
     # drop Disp. X and Disp. Z columns for y
-    X = all_train_data.drop(columns=['Time','Disp. X', 'Disp. Z', '日期'])
+    X = all_train_data.drop(columns=['Time','Disp. X', 'Disp. Z','日期'])
     y_x = all_train_data['Disp. X']
     y_z = all_train_data['Disp. Z']
-    
+
+    X_lag1 = X.copy().shift(1)
+    # replace column names to avoid confusion
+    X_lag1.columns = [f"{col}_lag1" for col in X.columns]
+    # drop the last row of X_lag1
+    X_lag1 = X_lag1.iloc[1:].reset_index(drop=True)
+
+    #drop the first row of X 
+    X = X.iloc[1:].reset_index(drop=True)
+    y_x = y_x.iloc[1:].reset_index(drop=True)
+    y_z = y_z.iloc[1:].reset_index(drop=True)
+
+    X = pd.concat([X, X_lag1], axis=1)
+    # print sum of nan
+    print("Sum of NaN in X after adding lag1 features:", X.isnull().sum().sum())
+    # fill NaN values with 0
+    X.fillna(0, inplace=True)
  
     # x size
     print("X shape:", X.shape)
     print("Number of features:", X.shape[1])
-    
+
+    # head
+    print("X head:", X.head())
+    # kill  the program
+    #raise SystemExit("Stopping execution for debugging purposes.")    
     # Create typeofFeatures to match the number of features
     # Assuming first 25 are numerical and remaining are categorical
-    typeofFeatures_new = [1] * (X.shape[1] - 11) + [0] * 11
+    typeofFeatures_new = [1] * 24 + [0] * (int(X.shape[1]/2) - 24) + [1] * 24 + [0] * (int(X.shape[1]/2) - 24)
+
     
     # Create a test dataset with the same structure as X (DataFrame) instead of numpy array
     X_test_dummy = pd.DataFrame(np.zeros((X.shape[0], X.shape[1])), columns=X.columns)
@@ -83,16 +75,22 @@ if __name__ == '__main__':
 
     X_test_dummy = pd.DataFrame(np.zeros((new_dataset.shape[0], new_dataset.shape[1])), columns=new_dataset.columns)
     feature_types = {
+        # 數值型
+        'PT01': 1, 'PT02': 1, 'PT03': 1, 'PT04': 1, 'PT05': 1, 'PT06': 1, 'PT07': 1, 'PT08': 1, 'PT09': 1, 'PT10': 1,
+        'PT11': 1, 'PT12': 1, 'PT13': 1, 'TC01': 1, 'TC02': 1, 'TC03': 1, 'TC04': 1, 'TC05': 1, 'TC06': 1, 'TC07': 1, 'TC08': 1,
+        'Spindle Motor': 1, 'X Motor': 1, 'Z Motor': 1,
         # 類別型
         '轉速 (rpm)': 0, '進給 (mm/min)': 0, '時間 (Hr)': 0,
         '轉速 (rpm).1': 0, '進給 (mm/min).1': 0, '時間 (Hr).1': 0,
         '轉速 (rpm).2': 0, '進給 (mm/min).2': 0, '時間 (Hr).2': 0,
         '控溫': 0, '溫度': 0
     }
+    feature_types_lag = feature_types.copy()
+    for col, tp in feature_types.items():
+        feature_types_lag[f"{col}_lag1"] = tp
+
     # typeofFeatures 直接用 new_dataset.columns
-    # if not in feature_types, default to numerical
-    # 1 for numerical, 0 for categorical
-    typeofFeatures_new = [feature_types.get(col, 1) for col in new_dataset.columns]
+    typeofFeatures_new = [feature_types_lag.get(col, 1) for col in new_dataset.columns]
     selected_data_checker = DataChecker(X=new_dataset, y=y_x, mode='reg', typeofFeatures=typeofFeatures_new, X_test=X_test_dummy)
     selected_data_checker.varify_data_types()
     selected_data_checker.apply_transformations(use_target_encoder=False)  # Use False to skip Target
@@ -106,5 +104,3 @@ if __name__ == '__main__':
     get_models_base_scores(splited_data['train_splits'], splited_data['valid_splits'])
 
     get_residual_correlation(splited_data['train_splits'], splited_data['valid_splits'], draw_diagram=True)
-
-    # do y_z

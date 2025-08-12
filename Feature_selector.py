@@ -54,9 +54,11 @@ class FeatureSelector:
         
     def init_model(self):
         if self.mode == 'reg':
-            self.model = xgb.XGBRegressor(device='gpu' if self.gpu_available and self.use_gpu else 'cpu')
+            self.model = xgb.XGBRegressor(device='gpu' if self.gpu_available and self.use_gpu else 'cpu',
+                                          eval_metric='rmse',)
         else:
-            self.model = xgb.XGBClassifier(device='gpu' if self.gpu_available and self.use_gpu else 'cpu')
+            self.model = xgb.XGBClassifier(device='gpu' if self.gpu_available and self.use_gpu else 'cpu',
+                                           eval_metric='logloss',)
         
     def get_baseline(self):
         """
@@ -77,15 +79,15 @@ class FeatureSelector:
         scores = []
         for threshold in tqdm(self.TypesofFeatures):
             self.init_model()
-            selector = SelectFromModel(self.model, threshold=f"{threshold}*median")
+            selector = SelectFromModel(self.model, threshold=f"{threshold}*mean")
             X_selected = selector.fit_transform(self.X, self.y)
             
             # Check if any features were selected
             if X_selected.shape[1] == 0:
                 raise ValueError(f"No features selected for threshold {threshold}. Please adjust the threshold or check your data.")
             
-            score = cross_val_score(self.model, X_selected, self.y, cv=10, scoring='neg_mean_squared_error' if self.mode == 'reg' else 'accuracy')
-            scores.append(list(np.sqrt(np.abs(score))) if self.mode == 'reg' else list(np.abs(score)))
+            score = cross_val_score(self.model, X_selected, self.y, cv=10, scoring='neg_root_mean_squared_error' if self.mode == 'reg' else 'accuracy')
+            scores.append(list(np.abs(score)) if self.mode == 'reg' else list(np.abs(score)))
         self.thres_scores = scores
         if self.mode == 'class':
             self.best_threshold = self.TypesofFeatures[np.argmax([np.mean(score) for score in scores])]
@@ -149,7 +151,7 @@ class FeatureSelector:
             raise ValueError("Threshold scores have not been calculated. Please run get_scores_with_different_thresholds() first.")
         
         
-        selector = SelectFromModel(self.model, threshold=f"{self.best_threshold}*median")
+        selector = SelectFromModel(self.model, threshold=f"{self.best_threshold}*mean")
         self.selector = selector
         X_selected = selector.fit_transform(self.X, self.y)
         
