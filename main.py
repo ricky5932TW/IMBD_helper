@@ -7,61 +7,42 @@ from Feature_selector import FeatureSelector
 from L1_model_zoo import *
 import os
 os.environ["LOKY_MAX_CPU_COUNT"] = "12"  # 限制最多使用 4 個核心
+from Search_hyper_params import Serch_hyperParams
 
 
 if __name__ == '__main__':
-    """
-    train_data_path = 'C:/Users/E4-159/Documents/GitHub/IMBD_helper/demo_datasets/playground-series-s5e8/train.csv'  
-    test_data_path = 'C:/Users/E4-159/Documents/GitHub/IMBD_helper/demo_datasets/playground-series-s5e8/test.csv'
-    data = pd.read_csv(train_data_path)
-    
-    # Check for missing values before fillna
-    print("Quantity of NaN in data before fillna:", data.isnull().sum().sum())
-    
-    # filling missing values with 0
-    data.fillna(0, inplace=True)
-
-    X = data.drop(columns=['id', 'y'])
-    target = data['y']
-    # col iloc 1,2,3,4,6,7,8,10,12,13,14,15
-    X_cat = X.iloc[:, [1, 2, 3, 4, 6, 7, 8, 10, 12, 13, 14, 15]]
-    X_num = X.iloc[:, [0, 5, 9, 11]]
-
-    # ordinal encoding for categorical features
-    X_cat = X_cat.apply(lambda col: OrdinalEncoder().fit_transform(col.values.reshape(-1, 1)).flatten() if col.dtype == 'object' else col)
-    X = pd.concat([X_num, X_cat], axis=1)
-    print("Data after encoding:", X.head())
-
-    X_test = pd.read_csv(test_data_path)
-    # Remove 'id' column from test data to match training data structure
-    X_test = X_test.drop(columns=['id'])
-    X_test_cat = X_test.iloc[:, [1, 2, 3, 4, 6, 7, 8, 10, 12, 13, 14, 15]]
-    X_test_num = X_test.iloc[:, [0, 5, 9, 11]]
-    X_test_cat = X_test_cat.apply(lambda col: OrdinalEncoder().fit_transform(col.values.reshape(-1, 1)).flatten() if col.dtype == 'object' else col)
-    X_test = pd.concat([X_test_num, X_test_cat], axis=1)
-    """
     all_train_data = pd.read_csv(rf'C:\Users\E4-159\Documents\py_surr\imbd2025\初\final_dataset_with_statics.csv')
     # drop Disp. X and Disp. Z columns for y
     X = all_train_data.drop(columns=['Time','Disp. X', 'Disp. Z', '日期'])
     y_x = all_train_data['Disp. X']
     y_z = all_train_data['Disp. Z']
-    
- 
+    '''pick Categorical features: ['轉速 (rpm)', '轉速 (rpm).1', '溫度']
+    Numerical features: ['Spindle Motor', 'X Motor', 'Z Motor', 'PT01_mean', 'PT01_skew', 'PT02_std', 'PT03_std', 'PT03_skew', 'PT06_std', 'PT07_skew', 'PT07_kurtosis', 'PT09_skew', 'PT11_skew', 'TC02_std', 'TC02_skew', 'TC03_skew', 'TC04_skew', 'TC06_kurtosis', 'TC07_median', 'TC07_quantile_75%', 'TC07_kurtosis', 'X Motor_skew', 'X Motor_kurtosis', 'Z Motor_skew']'''
+    X = X[['轉速 (rpm)', '轉速 (rpm).1', '溫度','Spindle Motor', 'X Motor', 'Z Motor', 'PT01_mean', 'PT01_skew', 'PT02_std', 'PT03_std', 'PT03_skew', 'PT06_std', 'PT07_skew', 'PT07_kurtosis', 'PT09_skew', 'PT11_skew', 'TC02_std', 'TC02_skew', 'TC03_skew', 'TC04_skew', 'TC06_kurtosis', 'TC07_median', 'TC07_quantile_75%', 'TC07_kurtosis', 'X Motor_skew', 'X Motor_kurtosis', 'Z Motor_skew']]
     # x size
     print("X shape:", X.shape)
     print("Number of features:", X.shape[1])
     
     # Create typeofFeatures to match the number of features
     # Assuming first 25 are numerical and remaining are categorical
-    typeofFeatures_new = [1] * (X.shape[1] - 11) + [0] * 11
+    #typeofFeatures_new = [1] * (X.shape[1] - 11) + [0] * 11
+    typeofFeatures_new = [0] * 3 + [1] * (X.shape[1] - 3)  # First 3 are categorical, rest are numerical
     
     # Create a test dataset with the same structure as X (DataFrame) instead of numpy array
     X_test_dummy = pd.DataFrame(np.zeros((X.shape[0], X.shape[1])), columns=X.columns)
     
-    data_checker = DataChecker(X=X, y=y_x, mode='reg', typeofFeatures=typeofFeatures_new, X_test=X_test_dummy)
+    data_checker = DataChecker(X=X, y=y_z, mode='reg', typeofFeatures=typeofFeatures_new, X_test=X_test_dummy)
     data_checker.varify_data_types()
     data_checker.apply_transformations(use_target_encoder=False)  # Use False to skip Target Encoding for now
-    kfold_splits = data_checker.get_folds(n_splits=5, n_repeats=10)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+    kfold_splits = data_checker.get_folds(n_splits=5, n_repeats=10)    
+
+    do = Serch_hyperParams(train=kfold_splits['train_splits'], val=kfold_splits['valid_splits'], mode='reg', use_gpu=True)
+    #xgboost_params = do.search_in_xgboost()   #done
+    #randomforest_params = do.search_in_randomforest()
+    #catboost_params = do.search_in_catboost()
+    #extratrees_params = do.search_in_extratrees()
+    lgbm_params = do.search_in_lgbm()
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
     print("KFold splits created successfully.")
     #data_checker.compare_train_and_test()
     print("Data comparison completed successfully.")
@@ -69,7 +50,7 @@ if __name__ == '__main__':
     print("Diversity check completed successfully.")
 
     # Use y0 (first target column) for feature selection instead of undefined 'target'
-    feature_selector = FeatureSelector(X=X, y=y_x, mode='reg', use_gpu=True)
+    feature_selector = FeatureSelector(X=X, y=y_z, mode='reg', use_gpu=True)
     
     _ = feature_selector.get_baseline()
     _ = feature_selector.get_scores_with_different_thresholds()
@@ -93,7 +74,7 @@ if __name__ == '__main__':
     # if not in feature_types, default to numerical
     # 1 for numerical, 0 for categorical
     typeofFeatures_new = [feature_types.get(col, 1) for col in new_dataset.columns]
-    selected_data_checker = DataChecker(X=new_dataset, y=y_x, mode='reg', typeofFeatures=typeofFeatures_new, X_test=X_test_dummy)
+    selected_data_checker = DataChecker(X=new_dataset, y=y_z, mode='reg', typeofFeatures=typeofFeatures_new, X_test=X_test_dummy)
     selected_data_checker.varify_data_types()
     selected_data_checker.apply_transformations(use_target_encoder=False)  # Use False to skip Target
     splited_data = selected_data_checker.get_folds(n_splits=5, n_repeats=10)

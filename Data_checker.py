@@ -129,33 +129,7 @@ class DataChecker:
             )
 
 
-            # 數值型特徵先 RobustScaler 再 Gaussian Rank (QuantileTransformer)
-            scaler = None
-            gaussian = None
-            if len(num_cols) > 0:
-                if control_scaler:
-                    scaler = RobustScaler()
-                    X_train_cv[num_cols] = scaler.fit_transform(X_train_cv[num_cols])
-                    X_holdout[num_cols] = scaler.transform(X_holdout[num_cols])
-                if control_gaussian:
-                    gaussian = QuantileTransformer(output_distribution='normal')
-                    X_train_cv[num_cols] = gaussian.fit_transform(X_train_cv[num_cols])
-                    X_holdout[num_cols] = gaussian.transform(X_holdout[num_cols])
-            # 存進 self
-            self.cv_scaler = scaler
-            self.cv_gaussian = gaussian
-
-            # 類別型特徵做 TargetEncoder
-            encoder = None
-            if len(cat_cols) > 0 and control_targetencoder:
-                try:
-                    encoder = TargetEncoder()
-                    X_train_cv[cat_cols] = encoder.fit_transform(X_train_cv[cat_cols], y_train_cv)
-                    X_holdout[cat_cols] = encoder.transform(X_holdout[cat_cols])
-                except Exception as e:
-                    print(f"Error in target encoding: {e}")
-            self.cv_encoder = encoder
-
+           
             # Create RepeatedKFold on the remaining data
             rkf = RepeatedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=random_state)
 
@@ -216,9 +190,6 @@ class DataChecker:
             holdout_split = {
                 'X': X_holdout,
                 'y': y_holdout,
-                'scaler': scaler,
-                'gaussian': gaussian,
-                'encoder': encoder
             }
 
             return train_splits, valid_splits, holdout_split
