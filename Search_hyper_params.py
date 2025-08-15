@@ -49,7 +49,7 @@ class Serch_hyperParams:
             model = XGBRegressor(**params)
             scores = []
             for tr, va in zip(self.train_splits_of_splitters[0], self.valid_splits_of_splitters[0]):
-                model.fit(tr['X'], tr['y'], eval_set=[(va['X'], va['y'])])
+                model.fit(tr['X'], tr['y'], eval_set=[(va['X'], va['y'])], verbose=False)
                 score = rmse(va['y'].to_numpy(), model.predict(va['X']))
                 scores.append(score)
             return np.mean(scores)

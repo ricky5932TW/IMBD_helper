@@ -2,12 +2,12 @@ from Data_checker import DataChecker
 import pandas as pd
 import numpy as np
 import pickle
-from sklearn.preprocessing import OrdinalEncoder
 from Feature_selector import FeatureSelector
 from L1_model_zoo import *
 import os
 os.environ["LOKY_MAX_CPU_COUNT"] = "12"  # 限制最多使用 4 個核心
 from Search_hyper_params import Serch_hyperParams
+from train_models import Training_models
 
 
 if __name__ == '__main__':
@@ -37,11 +37,24 @@ if __name__ == '__main__':
     kfold_splits = data_checker.get_folds(n_splits=5, n_repeats=10)    
 
     do = Serch_hyperParams(train=kfold_splits['train_splits'], val=kfold_splits['valid_splits'], mode='reg', use_gpu=True)
-    #xgboost_params = do.search_in_xgboost()   #done
-    #randomforest_params = do.search_in_randomforest()
-    #catboost_params = do.search_in_catboost()
-    #extratrees_params = do.search_in_extratrees()
-    lgbm_params = do.search_in_lgbm()
+    xgboost_params = do.search_in_xgboost(n=1)   #done
+    randomforest_params = do.search_in_randomforest(n=1)
+    catboost_params = do.search_in_catboost(n=1)
+    extratrees_params = do.search_in_extratrees(n=1)
+    lgbm_params = do.search_in_lgbm(n=1)
+    # into 1 dict
+    all_params = {
+        'xgboost': xgboost_params,
+        'randomforest': randomforest_params,
+        'catboost': catboost_params,
+        'extratrees': extratrees_params,
+        'lgbm': lgbm_params
+    }
+    # train models
+    trainer = Training_models(train=kfold_splits['train_splits'], val=kfold_splits['valid_splits'], params=all_params)
+    trainer.train_models()
+    all_trained_models = trainer.trained_models
+    print("Trained models:", all_trained_models.keys())
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
     print("KFold splits created successfully.")
     #data_checker.compare_train_and_test()
