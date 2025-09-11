@@ -36,7 +36,7 @@ class Serch_hyperParams:
             params = {
                 'n_estimators': trial.suggest_int('n_estimators', 100, 1000, step=100),
                 'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, step=0.01),
-                'max_depth': trial.suggest_int('max_depth', 3, 10),
+                'max_depth': trial.suggest_int('max_depth', 3, 8),
                 'subsample': trial.suggest_float('subsample', 0.5, 1.0, step=0.05),
                 'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0, step=0.05),
                 'reg_alpha': trial.suggest_float('reg_alpha', 0.0, 1.0, step=0.1),

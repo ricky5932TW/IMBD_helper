@@ -19,15 +19,22 @@ class Training_models:
         self.train_splits = train
         self.valid_splits = val
         self.params = params if params else {}
-
-        self.models = {
-            'xgboost': XGBRegressor(**self.params.get('xgboost', {})),
-            'randomforest': RandomForestRegressor(**self.params.get('randomforest', {})),
-            'catboost': CatBoostRegressor(**self.params.get('catboost', {})),
-            'extratrees': ExtraTreesRegressor(**self.params.get('extratrees', {})),
-            'lgbm': LGBMRegressor(**self.params.get('lgbm', {})),
-        }
-
+        try:
+            self.models = {
+                'xgboost': XGBRegressor(**self.params.get('xgboost', {})),
+                'randomforest': RandomForestRegressor(**self.params.get('randomforest', {})),
+                'catboost': CatBoostRegressor(**self.params.get('catboost', {})),
+                'extratrees': ExtraTreesRegressor(**self.params.get('extratrees', {})),
+                'lgbm': LGBMRegressor(**self.params.get('lgbm', {})),
+            }
+        except:
+            self.models = {
+                'xgboost': XGBRegressor(),
+                'randomforest': RandomForestRegressor(),
+                'catboost': CatBoostRegressor(),
+                'extratrees': ExtraTreesRegressor(),
+                'lgbm': LGBMRegressor(),
+            }
         self.trained_models = {}
 
         self.scores = {}
