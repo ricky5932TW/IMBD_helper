@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Compete smarter when there&rsquo;s no public score.</b><br>
-  針對「公開 leaderboard 看不到分數」的競賽情境，打造的表格式機器學習實戰工具箱。
+  針對「無public score」的競賽情境，打造的表格式機器學習實戰工具箱。
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 
 工具的每一個模組都來自實戰：當比賽的 public leaderboard 被刻意限制、延遲公布、或乾脆不開放分數時，你唯一能倚賴的只有自己建立出來的 local 驗證機制、公平的特徵選擇流程，以及穩定的模型集成策略。IMBD Helper 就是把這些在競賽現場反覆被驗證有效的做法，整理成一套可以直接套用在任意表格資料上的框架。
 
-競賽官方資訊與歷屆紀錄可參考： [東海大學巨量資料分析與智慧應用粉絲專頁](https://www.facebook.com/THU.thubigdata/?locale=zh_TW)。
+競賽官方資訊與歷屆紀錄可參考： [全國智慧製造大數據分析競賽](https://www.facebook.com/THU.thubigdata/?locale=zh_TW)。
 
 ---
 
@@ -142,7 +142,6 @@ outputs/spaceship-titanic/metrics.json
 - **公司內部 POC 建模**：只有一份歷史資料、沒有公開對照分數，需要自己建立可信的驗證流程。
 - **封閉型競賽**：IMBD 這類複賽/決賽才公布最終分數的比賽，前期只能依靠 local CV + holdout 判斷改動是否真的有效。
 
-
 ---
 
 ## 專案結構
@@ -161,14 +160,5 @@ IMBD_helper/
 ├── requirements.txt
 └── docs/assets/            # hero 圖與其他素材
 ```
-
----
-
-## 聯絡
-
-若對專案有建議、想交流競賽策略，歡迎循以下管道聯絡：
-
-
-- Issue / PR：直接在本 repo 提出
 
 

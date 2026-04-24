@@ -456,7 +456,7 @@ def build_parser():
     parser.add_argument("--feature-candidates", dest="feature_thresholds", default="", help="RFE candidate list using integer feature counts only (e.g. 1,2,3,4). Leave empty to try all counts 1..n_features.")
     parser.add_argument("--feature-thresholds", dest="feature_thresholds", help="Deprecated alias of --feature-candidates")
     parser.add_argument("--min-selected-features", type=int, default=1, help="Minimum number of features to keep when selecting the best RFE candidate.")
-    parser.add_argument("--optuna-trials", type=int, default=100, help="Trials per ensemble model. Use 0 for fixed defaults.")
+    parser.add_argument("--optuna-trials", type=int, default=10, help="Trials per ensemble model. Use 0 for fixed defaults.")
     parser.add_argument("--use-gpu", action="store_true", help="Pass GPU hints to XGBoost feature selection/search.")
     return parser
 
