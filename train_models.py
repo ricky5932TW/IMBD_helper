@@ -1,63 +1,122 @@
-from sklearn.linear_model import Ridge, LinearRegression, Lasso
-from sklearn.svm import SVR
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
-from xgboost import XGBRegressor
-# lgbm
-from lightgbm import LGBMRegressor
-#catboost
-from catboost import CatBoostRegressor
-#MLP
-from sklearn.neural_network import MLPRegressor
+import copy
+
+import numpy as np
+from catboost import CatBoostClassifier, CatBoostRegressor
+from lightgbm import LGBMClassifier, LGBMRegressor
+from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor, RandomForestClassifier, RandomForestRegressor
+from sklearn.metrics import accuracy_score
 from sklearn.metrics import root_mean_squared_error as rmse
 from tqdm import tqdm
-import optuna
-import numpy as np
+from xgboost import XGBClassifier, XGBRegressor
+
 
 class Training_models:
-    def __init__(self, train, val,params=None):
+    def __init__(self, train, val, params=None, mode='reg'):
         self.train_splits = train
         self.valid_splits = val
         self.params = params if params else {}
-        try:
-            self.models = {
-                'xgboost': XGBRegressor(**self.params.get('xgboost', {})),
-                'randomforest': RandomForestRegressor(**self.params.get('randomforest', {})),
-                'catboost': CatBoostRegressor(**self.params.get('catboost', {})),
-                'extratrees': ExtraTreesRegressor(**self.params.get('extratrees', {})),
-                'lgbm': LGBMRegressor(**self.params.get('lgbm', {})),
-            }
-        except:
-            self.models = {
-                'xgboost': XGBRegressor(),
-                'randomforest': RandomForestRegressor(),
-                'catboost': CatBoostRegressor(),
-                'extratrees': ExtraTreesRegressor(),
-                'lgbm': LGBMRegressor(),
-            }
+        self.mode = mode
+        if self.mode not in ['reg', 'class']:
+            raise ValueError("Mode must be either 'reg' or 'class'.")
+        self.models = self._init_models()
         self.trained_models = {}
-
         self.scores = {}
+
+    def _model_params(self, name):
+        return copy.deepcopy(self.params.get(name, {}))
+
+    def _init_models(self):
+        if self.mode == 'class':
+            return {
+                'xgboost': XGBClassifier(
+                    random_state=42,
+                    eval_metric='logloss',
+                    **self._model_params('xgboost'),
+                ),
+                'randomforest': RandomForestClassifier(
+                    random_state=42,
+                    n_jobs=-1,
+                    **self._model_params('randomforest'),
+                ),
+                'catboost': CatBoostClassifier(
+                    random_state=42,
+                    verbose=False,
+                    loss_function='Logloss',
+                    **self._model_params('catboost'),
+                ),
+                'extratrees': ExtraTreesClassifier(
+                    random_state=42,
+                    n_jobs=-1,
+                    **self._model_params('extratrees'),
+                ),
+                'lgbm': LGBMClassifier(
+                    random_state=42,
+                    verbose=-1,
+                    **self._model_params('lgbm'),
+                ),
+            }
+
+        return {
+            'xgboost': XGBRegressor(
+                random_state=42,
+                objective='reg:squarederror',
+                eval_metric='rmse',
+                **self._model_params('xgboost'),
+            ),
+            'randomforest': RandomForestRegressor(
+                random_state=42,
+                n_jobs=-1,
+                **self._model_params('randomforest'),
+            ),
+            'catboost': CatBoostRegressor(
+                random_state=42,
+                verbose=False,
+                **self._model_params('catboost'),
+            ),
+            'extratrees': ExtraTreesRegressor(
+                random_state=42,
+                n_jobs=-1,
+                **self._model_params('extratrees'),
+            ),
+            'lgbm': LGBMRegressor(
+                random_state=42,
+                verbose=-1,
+                **self._model_params('lgbm'),
+            ),
+        }
+
+    def _fit_model(self, model, tr, va):
+        try:
+            model.fit(tr['X'], tr['y'], eval_set=[(va['X'], va['y'])], verbose=False)
+        except TypeError:
+            try:
+                model.fit(tr['X'], tr['y'], eval_set=[(va['X'], va['y'])])
+            except TypeError:
+                model.fit(tr['X'], tr['y'])
+        except Exception:
+            model.fit(tr['X'], tr['y'])
+
+    def _score_model(self, model, va):
+        predictions = model.predict(va['X'])
+        if self.mode == 'class':
+            return accuracy_score(va['y'].to_numpy(), predictions)
+        return rmse(va['y'].to_numpy(), predictions)
 
     def train_models(self):
         """
-        Train all models on the provided training splits.
+        Train all configured models on the provided folds.
         """
-        for model_name, model in self.models.items():
+        for model_name, template_model in self.models.items():
             print(f"Training {model_name}...")
             models = []
             scores = []
-            for tr, va in zip(self.train_splits[0], self.valid_splits[0]):
-                try:
-                    model.fit(tr['X'], tr['y'], eval_set=[(va['X'], va['y'])], verbose=False)
-                except:
-                    try:
-                        model.fit(tr['X'], tr['y'], eval_set=[(va['X'], va['y'])])
-                    except:
-                        model.fit(tr['X'], tr['y'])
+            for tr, va in tqdm(zip(self.train_splits[0], self.valid_splits[0])):
+                model = copy.deepcopy(template_model)
+                self._fit_model(model, tr, va)
                 models.append(model)
-                score = rmse(va['y'].to_numpy(), model.predict(va['X']))
-                scores.append(score)
-            self.scores[model_name] = np.mean(scores)
+                scores.append(self._score_model(model, va))
+
+            self.scores[model_name] = float(np.mean(scores))
             self.trained_models[model_name] = models
-            print(f"{model_name} trained with RMSE: {self.scores[model_name]}")
+            metric_name = 'accuracy' if self.mode == 'class' else 'RMSE'
+            print(f"{model_name} trained with {metric_name}: {self.scores[model_name]}")

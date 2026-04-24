@@ -1,7 +1,7 @@
 import numpy as np
-from sklearn.preprocessing import QuantileTransformer, RobustScaler, TargetEncoder
+from sklearn.preprocessing import QuantileTransformer, RobustScaler
 import pandas as pd
-from sklearn.model_selection import train_test_split, RepeatedKFold
+from sklearn.model_selection import train_test_split, RepeatedKFold, RepeatedStratifiedKFold
 from xgboost import XGBRegressor, XGBClassifier
 from compare_preprocess import PreprocessComparison
 from sklearn.metrics import root_mean_squared_error
@@ -9,6 +9,11 @@ from tqdm import tqdm
 from colorama import Fore, Style, init
 init(autoreset=True)
 from sklearn.preprocessing import OrdinalEncoder
+
+try:
+    from sklearn.preprocessing import TargetEncoder
+except ImportError:
+    TargetEncoder = None
 
 
 class DataChecker:
@@ -36,8 +41,11 @@ class DataChecker:
         self.scalers = []
         self.transformers = []
         self.target_encoders = []
+        self.ordinal_encoders = {}
+        self.text_columns = []
 
         self.checkDtype()
+        self.auto_encode_text_columns()
 
     def checkDtype(self):
         if self.X is None or self.y is None:
@@ -50,6 +58,57 @@ class DataChecker:
             raise TypeError("Input data X must be a pandas DataFrame and y must be a pandas Series.")
         if self.mode not in ['reg', 'class']:
             raise ValueError("Mode must be either 'reg' for regression or 'class' for classification.")
+
+    def auto_encode_text_columns(self):
+        """
+        Auto-detect object / category columns and apply OrdinalEncoder.
+        Fits on train+test combined so unseen categories in test don't break.
+        Also auto-populates typeofFeatures (0=cat, 1=num) when not provided.
+        """
+        text_cols = [
+            col for col in self.X.columns
+            if self.X[col].dtype == 'object' or str(self.X[col].dtype) == 'category'
+        ]
+
+        if text_cols:
+            print(Fore.CYAN + f"Auto-detected text/object columns: {text_cols}")
+            for col in text_cols:
+                encoder = OrdinalEncoder(
+                    handle_unknown='use_encoded_value', unknown_value=-1
+                )
+                train_vals = self.X[col].astype(str).values.reshape(-1, 1)
+                if self.X_test is not None and col in self.X_test.columns:
+                    test_vals = self.X_test[col].astype(str).values.reshape(-1, 1)
+                    combined = np.concatenate([train_vals, test_vals], axis=0)
+                    encoder.fit(combined)
+                    self.X_test[col] = encoder.transform(test_vals).flatten()
+                else:
+                    encoder.fit(train_vals)
+                self.X[col] = encoder.transform(train_vals).flatten()
+                self.ordinal_encoders[col] = encoder
+            print(Fore.GREEN + f"Encoded {len(text_cols)} text columns with OrdinalEncoder.")
+        else:
+            if self.typeofFeatures is not None:
+                provided_cat_count = sum(typ == 0 for typ in self.typeofFeatures)
+                if provided_cat_count > 0:
+                    print("No raw text/object columns detected; categorical columns appear to be already encoded.")
+                else:
+                    print("No text/object columns detected; all features are numeric.")
+            else:
+                print("No text/object columns detected, skipping auto-encoding.")
+
+        self.text_columns = text_cols
+
+        if self.typeofFeatures is None:
+            self.typeofFeatures = [
+                0 if col in text_cols else 1
+                for col in self.X.columns
+            ]
+            n_cat = sum(t == 0 for t in self.typeofFeatures)
+            n_num = sum(t == 1 for t in self.typeofFeatures)
+            print(Fore.CYAN + f"Auto-populated typeofFeatures: {n_cat} categorical, {n_num} numerical")
+
+        return text_cols
         
     def varify_data_types(self):
         """
@@ -100,7 +159,16 @@ class DataChecker:
         else:
             print("No categorical features found, skipping target encoding.")
 
-    def get_folds(self, n_splits=5, n_repeats=10, control_scaler=True, control_gaussian=True, control_targetencoder=True):
+    def get_folds(
+        self,
+        n_splits=5,
+        n_repeats=10,
+        control_scaler=True,
+        control_gaussian=True,
+        control_targetencoder=True,
+        holdout_size=0.1,
+        random_state=42,
+    ):
 
 
         # 根據 typeofFeatures 分辨數值型與類別型
@@ -123,21 +191,26 @@ class DataChecker:
             """
             Get Repeated KFold splits with true holdout set for regression/classification problem
             """
+            stratify_y = y if self.mode == 'class' else None
             # First split: separate holdout set
             X_train_cv, X_holdout, y_train_cv, y_holdout = train_test_split(
-                X, y, test_size=holdout_size, random_state=random_state, stratify=None
+                X, y, test_size=holdout_size, random_state=random_state, stratify=stratify_y
             )
 
 
            
-            # Create RepeatedKFold on the remaining data
-            rkf = RepeatedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=random_state)
+            if self.mode == 'class':
+                rkf = RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=random_state)
+                split_iterator = rkf.split(X_train_cv, y_train_cv)
+            else:
+                rkf = RepeatedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=random_state)
+                split_iterator = rkf.split(X_train_cv)
 
             train_splits = []
             valid_splits = []
 
 
-            for train_idx, valid_idx in rkf.split(X_train_cv):
+            for train_idx, valid_idx in split_iterator:
                 X_train_fold = X_train_cv.iloc[train_idx].copy()
                 X_valid_fold = X_train_cv.iloc[valid_idx].copy()
                 y_train_fold = y_train_cv.iloc[train_idx] if isinstance(y_train_cv, pd.DataFrame) else y_train_cv.iloc[train_idx]
@@ -158,9 +231,15 @@ class DataChecker:
                         X_valid_fold[num_cols] = gaussian_fold.transform(X_valid_fold[num_cols])
                 if len(cat_cols) > 0 and control_targetencoder:
                     try:
+                        if TargetEncoder is None:
+                            raise ImportError("TargetEncoder is not available in this scikit-learn version.")
                         encoder_fold = TargetEncoder()
                         X_train_fold[cat_cols] = encoder_fold.fit_transform(X_train_fold[cat_cols], y_train_fold)
                         X_valid_fold[cat_cols] = encoder_fold.transform(X_valid_fold[cat_cols])
+                        encoded_features = list(getattr(encoder_fold, 'feature_names_in_', cat_cols))
+                        missing = [c for c in cat_cols if c not in encoded_features]
+                        if missing:
+                            raise RuntimeError(f"Target encoding missed columns: {missing}")
                     except Exception as e:
                         print(f"Error in fold target encoding: {e}")
 
@@ -212,6 +291,12 @@ class DataChecker:
         print(f"Validation set size for first fold: {len(valid_splits_of_splitters[0][0]['X'])}")
         print(f"Holdout set size: {len(holdout_splits[0]['X'])}")
         print(f"Total original data size: {len(self.X)}")
+
+        if control_targetencoder and len(cat_cols) > 0:
+            encoded_folds = sum(enc is not None for enc in self.folds_encoders)
+            print(Fore.GREEN + f"Target encoding applied to {len(cat_cols)} categorical columns "
+                              f"across {encoded_folds}/{len(self.folds_encoders)} folds.")
+            print(Fore.GREEN + f"Encoded categorical columns: {cat_cols}")
 
         self.kfold = {
             'train_splits': train_splits_of_splitters,
@@ -283,28 +368,13 @@ if __name__ == '__main__':
 
     X = data.drop(columns=['id', 'y'])
     target = data['y']
-    # col iloc 1,2,3,4,6,7,8,10,12,13,14,15
-    X_cat = X.iloc[:, [1, 2, 3, 4, 6, 7, 8, 10, 12, 13, 14, 15]]
-    X_num = X.iloc[:, [0, 5, 9, 11]]
-
-    # ordinal encoding for categorical features
-    X_cat = X_cat.apply(lambda col: OrdinalEncoder().fit_transform(col.values.reshape(-1, 1)).flatten() if col.dtype == 'object' else col)
-    X = pd.concat([X_num, X_cat], axis=1)
-    print("Data after encoding:", X.head())
 
     X_test = pd.read_csv(test_data_path)
-    # Remove 'id' column from test data to match training data structure
     X_test = X_test.drop(columns=['id'])
-    X_test_cat = X_test.iloc[:, [1, 2, 3, 4, 6, 7, 8, 10, 12, 13, 14, 15]]
-    X_test_num = X_test.iloc[:, [0, 5, 9, 11]]
-    X_test_cat = X_test_cat.apply(lambda col: OrdinalEncoder().fit_transform(col.values.reshape(-1, 1)).flatten() if col.dtype == 'object' else col)
-    X_test = pd.concat([X_test_num, X_test_cat], axis=1)
 
-
-    
-    typeofFeatures_new = [1, 1, 1, 1] + [0] * 12
-
-    data_checker = DataChecker(X=X, y=target, mode='class', typeofFeatures=typeofFeatures_new, X_test=X_test)
+    # DataChecker auto-detects object columns and encodes them,
+    # and auto-populates typeofFeatures based on dtype when omitted.
+    data_checker = DataChecker(X=X, y=target, mode='class', X_test=X_test)
     data_checker.varify_data_types()
     data_checker.apply_transformations()
     kfold_splits = data_checker.get_folds(n_splits=5, n_repeats=10)

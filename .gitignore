@@ -4,5 +4,8 @@
 *.json
 *.tfevents
 *.tsv
-/AutogluonModels
 /catboost_info
+/outputs
+/demo_datasets/spaceship-titanic/*.zip
+__pycache__
+.conda
