@@ -65,9 +65,16 @@ class DataChecker:
         Fits on train+test combined so unseen categories in test don't break.
         Also auto-populates typeofFeatures (0=cat, 1=num) when not provided.
         """
+        def is_text_dtype(dtype):
+            return (
+                pd.api.types.is_object_dtype(dtype)
+                or pd.api.types.is_string_dtype(dtype)
+                or isinstance(dtype, pd.CategoricalDtype)
+            )
+
         text_cols = [
             col for col in self.X.columns
-            if self.X[col].dtype == 'object' or str(self.X[col].dtype) == 'category'
+            if is_text_dtype(self.X[col].dtype)
         ]
 
         if text_cols:
@@ -81,10 +88,18 @@ class DataChecker:
                     test_vals = self.X_test[col].astype(str).values.reshape(-1, 1)
                     combined = np.concatenate([train_vals, test_vals], axis=0)
                     encoder.fit(combined)
-                    self.X_test[col] = encoder.transform(test_vals).flatten()
+                    self.X_test[col] = pd.Series(
+                        encoder.transform(test_vals).flatten(),
+                        index=self.X_test.index,
+                        dtype='float64',
+                    )
                 else:
                     encoder.fit(train_vals)
-                self.X[col] = encoder.transform(train_vals).flatten()
+                self.X[col] = pd.Series(
+                    encoder.transform(train_vals).flatten(),
+                    index=self.X.index,
+                    dtype='float64',
+                )
                 self.ordinal_encoders[col] = encoder
             print(Fore.GREEN + f"Encoded {len(text_cols)} text columns with OrdinalEncoder.")
         else:
@@ -279,7 +294,7 @@ class DataChecker:
         holdout_splits = []
 
         train_splits, valid_splits, holdout_split = get_repeated_kfold_splits_with_holdout(
-            self.X.copy(), self.y.copy(), n_splits=n_splits, n_repeats=n_repeats, holdout_size=0.1, random_state=42
+            self.X.copy(), self.y.copy(), n_splits=n_splits, n_repeats=n_repeats, holdout_size=holdout_size, random_state=random_state
         )
         train_splits_of_splitters.append(train_splits)
         valid_splits_of_splitters.append(valid_splits)

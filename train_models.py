@@ -25,13 +25,28 @@ class Training_models:
     def _model_params(self, name):
         return copy.deepcopy(self.params.get(name, {}))
 
+    def _n_classes(self):
+        if self.mode != 'class':
+            return None
+        y = self.train_splits[0][0]['y']
+        return int(np.unique(np.asarray(y)).size)
+
     def _init_models(self):
         if self.mode == 'class':
+            n_classes = self._n_classes()
+            xgboost_params = self._model_params('xgboost')
+            xgboost_params.setdefault('eval_metric', 'mlogloss' if n_classes > 2 else 'logloss')
+            if n_classes > 2:
+                xgboost_params.setdefault('objective', 'multi:softprob')
+                xgboost_params.setdefault('num_class', n_classes)
+
+            catboost_params = self._model_params('catboost')
+            catboost_params.setdefault('loss_function', 'MultiClass' if n_classes > 2 else 'Logloss')
+
             return {
                 'xgboost': XGBClassifier(
                     random_state=42,
-                    eval_metric='logloss',
-                    **self._model_params('xgboost'),
+                    **xgboost_params,
                 ),
                 'randomforest': RandomForestClassifier(
                     random_state=42,
@@ -41,8 +56,7 @@ class Training_models:
                 'catboost': CatBoostClassifier(
                     random_state=42,
                     verbose=False,
-                    loss_function='Logloss',
-                    **self._model_params('catboost'),
+                    **catboost_params,
                 ),
                 'extratrees': ExtraTreesClassifier(
                     random_state=42,

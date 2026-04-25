@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 
 class KFoldPredictor:
@@ -25,25 +26,58 @@ class KFoldPredictor:
 
     def _transform_with_fold_artifacts(self, X, robust_scaler, gaussian, encoder):
         transformed = X.copy()
+        original_columns = transformed.columns.tolist()
 
         numerical_indices = [i for i, feature_type in enumerate(self.types_of_features) if feature_type == 1]
-        if numerical_indices and robust_scaler is not None:
-            transformed.iloc[:, numerical_indices] = robust_scaler.transform(transformed.iloc[:, numerical_indices])
-        if numerical_indices and gaussian is not None:
-            transformed.iloc[:, numerical_indices] = gaussian.transform(transformed.iloc[:, numerical_indices])
+        if numerical_indices:
+            numerical_columns = transformed.columns[numerical_indices].tolist()
+            numerical_frame = transformed.loc[:, numerical_columns].apply(pd.to_numeric, errors='coerce').fillna(0.0)
+            if robust_scaler is not None:
+                numerical_frame = pd.DataFrame(
+                    robust_scaler.transform(numerical_frame),
+                    columns=numerical_columns,
+                    index=transformed.index,
+                )
+            if gaussian is not None:
+                numerical_frame = pd.DataFrame(
+                    gaussian.transform(numerical_frame),
+                    columns=numerical_columns,
+                    index=transformed.index,
+                )
+            transformed = (
+                transformed.drop(columns=numerical_columns)
+                .join(numerical_frame.astype(float))
+                .reindex(columns=original_columns)
+            )
 
         categorical_indices = [i for i, feature_type in enumerate(self.types_of_features) if feature_type == 0]
         if categorical_indices and encoder is not None:
-            transformed.iloc[:, categorical_indices] = encoder.transform(transformed.iloc[:, categorical_indices])
+            categorical_columns = transformed.columns[categorical_indices].tolist()
+            categorical_frame = pd.DataFrame(
+                encoder.transform(transformed.loc[:, categorical_columns]),
+                columns=categorical_columns,
+                index=transformed.index,
+            )
+            transformed = (
+                transformed.drop(columns=categorical_columns)
+                .join(categorical_frame.astype(float))
+                .reindex(columns=original_columns)
+            )
 
-        return transformed
+        return transformed.apply(pd.to_numeric, errors='coerce').fillna(0.0)
 
     def _predict_model_output(self, model, X):
         if self.mode == 'class':
             if hasattr(model, 'predict_proba'):
-                return model.predict_proba(X)[:, 1]
+                return model.predict_proba(X)
             return model.predict(X).astype(float)
         return model.predict(X)
+
+    def _classification_labels(self, predictions):
+        predictions = np.asarray(predictions)
+        if predictions.ndim == 2 and predictions.shape[1] > 1:
+            return np.argmax(predictions, axis=1)
+        return (predictions.ravel() >= 0.5).astype(int)
 
     def _predict_each_model(self, X):
         predictions = {}
@@ -66,7 +100,7 @@ class KFoldPredictor:
 
         for model_name, preds in predictions.items():
             if self.mode == 'class':
-                score = float(np.mean((preds >= 0.5).astype(int) == holdout['y'].to_numpy()))
+                score = float(np.mean(self._classification_labels(preds) == holdout['y'].to_numpy()))
                 self.metrics[model_name] = score
                 print(f"Accuracy for {model_name}: {score}")
             else:
@@ -78,7 +112,7 @@ class KFoldPredictor:
         final_prediction = self._weighted_prediction(predictions)
 
         if self.mode == 'class':
-            final_score = float(np.mean((final_prediction >= 0.5).astype(int) == holdout['y'].to_numpy()))
+            final_score = float(np.mean(self._classification_labels(final_prediction) == holdout['y'].to_numpy()))
             print(f"Final accuracy: {final_score}")
             return final_score
 
@@ -96,5 +130,5 @@ class KFoldPredictor:
         predictions = self._predict_each_model(X)
         final_prediction = self._weighted_prediction(predictions)
         if self.mode == 'class' and not return_proba:
-            return (final_prediction >= 0.5).astype(int)
+            return self._classification_labels(final_prediction)
         return final_prediction

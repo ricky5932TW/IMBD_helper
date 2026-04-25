@@ -24,6 +24,12 @@ class Serch_hyperParams:
         if self.mode not in ['reg', 'class']:
             raise ValueError("Mode must be either 'reg' or 'class'.")
 
+    def _n_classes(self):
+        if self.mode != 'class':
+            return None
+        y = self.train_splits_of_splitters[0][0]['y']
+        return int(np.unique(np.asarray(y)).size)
+
     def _score_model(self, model):
         scores = []
         for tr, va in zip(self.train_splits_of_splitters[0], self.valid_splits_of_splitters[0]):
@@ -64,7 +70,12 @@ class Serch_hyperParams:
             if self.use_gpu:
                 params['device'] = 'cuda'
             if self.mode == 'class':
-                model = XGBClassifier(eval_metric='logloss', **params)
+                n_classes = self._n_classes()
+                params['eval_metric'] = 'mlogloss' if n_classes > 2 else 'logloss'
+                if n_classes > 2:
+                    params['objective'] = 'multi:softprob'
+                    params['num_class'] = n_classes
+                model = XGBClassifier(**params)
                 return self._score_model(model)
             model = XGBRegressor(objective='reg:squarederror', eval_metric='rmse', **params)
             return self._score_model(model)
@@ -104,7 +115,8 @@ class Serch_hyperParams:
                 'verbose': False,
             }
             if self.mode == 'class':
-                model = CatBoostClassifier(loss_function='Logloss', **params)
+                loss_function = 'MultiClass' if self._n_classes() > 2 else 'Logloss'
+                model = CatBoostClassifier(loss_function=loss_function, **params)
             else:
                 model = CatBoostRegressor(**params)
             return self._score_model(model)

@@ -1,105 +1,90 @@
 <p align="center">
-  <img src="docs\assets\ChatGPT Image 2026年4月25日 上午02_32_31.png" alt="IMBD Helper — Compete smarter when there's no public score" width="100%">
+  <img src="docs/assets/ChatGPT Image 2026年4月25日 上午02_32_31.png" alt="IMBD Helper" width="100%">
 </p>
 
 <h1 align="center">IMBD Helper</h1>
 
 <p align="center">
-  <b>Compete smarter when there&rsquo;s no public score.</b><br>
-  針對「無public score」的競賽情境，打造的表格式機器學習實戰工具箱。
-</p>
-
-<p align="center">
-  <a href="https://www.facebook.com/THU.thubigdata/?locale=zh_TW"><img src="https://img.shields.io/badge/2025%20%E5%85%A8%E5%9C%8B%E6%99%BA%E6%85%A7%E8%A3%BD%E9%80%A0%E5%A4%A7%E6%95%B8%E6%93%9A%E5%88%86%E6%9E%90%E7%AB%B6%E8%B3%BD-%E5%85%A5%E5%9C%8D-1f6feb?style=for-the-badge" alt="2025 IMBD 入圍"></a>
-  <a href="https://www.facebook.com/THU.thubigdata/?locale=zh_TW"><img src="https://img.shields.io/badge/2024%20%E5%85%A8%E5%9C%8B%E6%99%BA%E6%85%A7%E8%A3%BD%E9%80%A0%E5%A4%A7%E6%95%B8%E6%93%9A%E5%88%86%E6%9E%90%E7%AB%B6%E8%B3%BD-%E4%BD%B3%E4%BD%9C-0aa344?style=for-the-badge" alt="2024 IMBD 佳作"></a>
+  <b>Local validation and model diversity for constrained tabular ML competitions.</b>
 </p>
 
 ---
 
-## 關於作者
+## 這份 README 的記憶
 
-本專案由 **2025 全國智慧製造大數據分析競賽（IMBD）入圍**、**2024 全國智慧製造大數據分析競賽（IMBD）佳作** 的參賽者所設計與維護。
+這個 repo 的主線以 `test.ipynb`、`main.py`，以及目前整理好的 [spaceship_titanic_imbd_helper.ipynb](spaceship_titanic_imbd_helper.ipynb) 為準，不再另外編一套故事：
 
-工具的每一個模組都來自實戰：當比賽的 public leaderboard 被刻意限制、延遲公布、或乾脆不開放分數時，你唯一能倚賴的只有自己建立出來的 local 驗證機制、公平的特徵選擇流程，以及穩定的模型集成策略。IMBD Helper 就是把這些在競賽現場反覆被驗證有效的做法，整理成一套可以直接套用在任意表格資料上的框架。
+1. 用 `DataChecker` 檢查資料、標記類別/數值欄位、建立 holdout + repeated k-fold。
+2. 用 `FeatureSelector` 做 XGBoost + RFE，先把可用特徵縮到較穩定的集合。
+3. 在每個 fold 跑大量模型 family：Ridge、Linear、Lasso、SVR、KNN、RF、XGB、LGBM、CatBoost、MLP、ExtraTrees。
+4. 用 `KFoldPredictor` 在 holdout 上算各模型表現，轉成 ensemble 權重，再預測 test set。
 
-競賽官方資訊與歷屆紀錄可參考： [全國智慧製造大數據分析競賽](https://www.facebook.com/THU.thubigdata/?locale=zh_TW)。
-
----
-
-## 解決什麼問題
-
-在 IMBD 等競賽裡，「能不能上 leaderboard」往往不是瓶頸，**「本地驗證的分數跟最終 private score 對不對齊」** 才是。當 public score 被延遲或根本看不到時，你需要：
-
-1. **可信的 local holdout** — 一份從頭到尾沒被任何模型看過的資料。
-2. **嚴謹的 cross-validation** — Repeated Stratified K-Fold，避免單次切分的運氣成分。
-3. **公平的特徵選擇** — 不使用會洩漏 target 的方法，每個 fold 都是獨立 refit。
-4. **不同家族的模型集成** — 避免單一演算法偏差主宰結果。
-5. **以 holdout 表現為權重的加權平均** — 而不是盲目平均各模型輸出。
-
-IMBD Helper 把這五件事包裝成五個可以獨立使用、也可以串成 pipeline 的模組。
+`Serch_hyperParams` 仍可用於 Optuna 搜尋，但不是這份 notebook 的核心假設。這套流程更重視在受限連線、不能長時間依賴雲端/大型搜尋服務、或不方便反覆跑進階 hyperparameter search 的環境下，用 RFE + 多模型組合把 local validation 撐穩。
 
 ---
 
-## 核心特色
+## 專案定位
 
-| 模組 | 功能 | 技術重點 |
-| --- | --- | --- |
-| **[Data_checker.py](Data_checker.py)** | 資料檢查與預處理 | 自動偵測類別/數值欄位、OrdinalEncoder 合併 train+test 以避免 unseen categories、RobustScaler + QuantileTransformer 穩健化、分層交叉驗證切分與 fold diversity 檢驗 |
-| **[Feature_selector.py](Feature_selector.py)** | 特徵選擇 | XGBoost + RFE 遞迴式特徵消去，支援 GPU 加速，比較不同特徵數量下的 CV 分數以選出最佳子集 |
-| **[Search_hyper_params.py](Search_hyper_params.py)** | 超參數搜尋 | 使用 Optuna 對 XGBoost / RandomForest / ExtraTrees / LightGBM / CatBoost 分別做獨立搜尋，支援 GPU 與分類/回歸模式 |
-| **[train_models.py](train_models.py)** | 模型訓練 | 在每個 fold 重新訓練 5 家不同模型，保留所有 fold-trained 模型與對應的預處理物件 |
-| **[Kfold_predictor.py](Kfold_predictor.py)** | 加權集成預測 | 以 holdout 表現作為權重計算各模型貢獻度，對 test set 做加權機率平均，產生最終提交檔 |
+IMBD Helper 是一套表格式資料競賽用的小型 pipeline。它適合用在 public score 不可靠、看不到、或不想過度追 leaderboard 的情境：你先建立穩定的 local holdout 與 cross-validation，再用 RFE 和多模型 fold ensemble 降低單一模型偏差。
 
-### 為什麼這樣設計
+這個專案特別面向「環境受限」的比賽現場：連線不穩、不能方便使用外部 AutoML/雲端調參、或沒有時間做很深的超參數搜尋時，與其把希望押在單一模型的最佳參數，不如用一批差異夠大的模型 family 互相補位，再用 holdout 表現決定權重。
 
-- **預處理物件跟著 fold 走**：每個 fold 有自己的 scaler、transformer、encoder，確保驗證時不會用到當前 fold 看不到的統計量。
-- **Classification 用機率平均、不是多數決**：保留模型的不確定性資訊，讓 ensemble 更穩。
-- **Holdout 永遠獨立**：holdout 在第一階段切出來之後，不參與任何 CV、不參與任何特徵選擇、不參與任何超參數搜尋，只在最後一步用來計算集成權重。
+目前支援：
+
+- 回歸與分類模式：`mode="reg"` / `mode="class"`
+- Repeated K-Fold / Repeated Stratified K-Fold
+- fold 內獨立的 scaler、Gaussian transform、TargetEncoder
+- Ridge、Linear、Lasso、SVR、KNN、RandomForest、XGBoost、LightGBM、CatBoost、MLP、ExtraTrees
+- holdout-based weighted ensemble
 
 ---
 
-## 工作流程
+## 核心模組
+
+| 檔案 | 負責內容 |
+| --- | --- |
+| [Data_checker.py](Data_checker.py) | 資料型別檢查、文字欄位自動編碼、類別/數值欄位管理、holdout + repeated k-fold 切分 |
+| [Feature_selector.py](Feature_selector.py) | XGBoost + RFE 特徵選擇，可用整數特徵數量當候選 |
+| [Search_hyper_params.py](Search_hyper_params.py) | 可選的 Optuna 超參數搜尋，在連線或時間允許時使用 |
+| [train_models.py](train_models.py) | 依 fold 訓練內建樹模型，保留每個 fold-trained model |
+| [Kfold_predictor.py](Kfold_predictor.py) | 將 fold 模型套回 holdout / test，依 holdout 表現計算 ensemble 權重 |
+| [L1_model_zoo.py](L1_model_zoo.py) | 額外的 L1 模型與殘差相關性檢查工具；Spaceship notebook 也沿用這種大量模型 family 的想法 |
+
+---
+
+## Pipeline
 
 ```mermaid
 flowchart LR
-    A[原始資料] --> B[Data_checker<br>型別偵測 + 編碼 + 切分]
-    B --> C[Feature_selector<br>XGB + RFE]
-    C --> D[Search_hyper_params<br>Optuna × 5 模型]
-    D --> E[train_models<br>每 fold refit 5 模型]
-    E --> F[Kfold_predictor<br>Holdout 加權集成]
-    F --> G[提交檔 submission.csv]
-    F --> H[Local metrics.json]
+    A[Raw train/test] --> B[DataChecker]
+    B --> C[FeatureSelector<br>XGB + RFE]
+    C --> D[Model zoo<br>many families]
+    D --> E[KFoldPredictor]
+    E --> F[submission.csv]
+    E --> G[holdout metrics]
 ```
 
 ---
 
-## 技術堆疊
+## 用法
 
-- **模型**：XGBoost、LightGBM、CatBoost、RandomForest、ExtraTrees
-- **搜尋**：Optuna（TPE sampler，支援 GPU）
-- **驗證**：`RepeatedStratifiedKFold` / `RepeatedKFold`
-- **前處理**：`RobustScaler`、`QuantileTransformer`、`OrdinalEncoder`、（可選）`TargetEncoder`
-- **視覺化**：matplotlib、seaborn
-- 完整依賴請見 [requirements.txt](requirements.txt)
+### 1. 啟動環境
 
----
+建議使用本專案的 conda 環境：
 
-## Benchmark：Spaceship Titanic
+```powershell
+conda activate imbd-helper
+```
 
-專案內建 [benchmark_spaceship.py](benchmark_spaceship.py)，在 Kaggle 的 Spaceship Titanic 資料集上比較：
-
-- **Baseline**：使用預設參數的單一 XGBoost。
-- **Custom ensemble**：走完整 IMBD Helper pipeline（特徵工程 → 特徵選擇 → 超參數搜尋 → 5 模型訓練 → holdout 加權集成）。
-
-### 安裝
+若環境還沒裝依賴，再執行：
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-### 資料放置
+### 2. 準備資料
 
-將 Kaggle 官方檔案放到：
+以 Spaceship Titanic 為例，資料放在：
 
 ```text
 demo_datasets/spaceship-titanic/train.csv
@@ -107,40 +92,136 @@ demo_datasets/spaceship-titanic/test.csv
 demo_datasets/spaceship-titanic/sample_submission.csv
 ```
 
-或使用 Kaggle CLI：
+若本機已設定 Kaggle CLI，也可以下載：
 
 ```powershell
 kaggle competitions download -c spaceship-titanic -p demo_datasets/spaceship-titanic
 ```
 
-### 執行
+### 3. 執行 Notebook
 
-```powershell
-python benchmark_spaceship.py
-```
-
-快速 smoke run（跳過 Optuna 搜尋）：
-
-```powershell
-python benchmark_spaceship.py --optuna-trials 0 --n-splits 3 --feature-cv 3
-```
-
-### 產出
+開啟 [spaceship_titanic_imbd_helper.ipynb](spaceship_titanic_imbd_helper.ipynb)，選擇 `imbd-helper` kernel 後依序執行。Notebook 會先做 Spaceship Titanic 專用的欄位整理，再跑完整流程：
 
 ```text
-outputs/spaceship-titanic/submission_default_xgb.csv
-outputs/spaceship-titanic/submission_custom_ensemble.csv
-outputs/spaceship-titanic/metrics.json
+DataChecker -> XGB RFE -> 11 model families -> KFoldPredictor
 ```
 
-兩份提交檔皆符合 Kaggle 要求的 `PassengerId,Transported` 格式。
+Notebook 最上方可以調整這些參數：
 
----
+| 參數 | 用途 | 建議 |
+| --- | --- | --- |
+| `N_SPLITS` | 每次 k-fold 的 fold 數 | 正式跑用 `5`，快速測試可降到 `2` 或 `3` |
+| `N_REPEATS` | repeated k-fold 重複次數 | 時間夠再提高 |
+| `RUN_RFE` | 是否執行 XGB + RFE 特徵選擇 | 正式流程建議 `True` |
+| `RFE_CV` | RFE 評估用的 CV fold 數 | 先用 `3`，資料小可提高 |
+| `RFE_FEATURE_COUNTS` | 指定 RFE 嘗試的特徵數 | `None` 代表跑 `1..n_features` |
 
-## 典型使用情境
+如果只是確認環境和流程，先用：
 
-- **公司內部 POC 建模**：只有一份歷史資料、沒有公開對照分數，需要自己建立可信的驗證流程。
-- **封閉型競賽**：IMBD 這類複賽/決賽才公布最終分數的比賽，前期只能依靠 local CV + holdout 判斷改動是否真的有效。
+```python
+N_SPLITS = 2
+N_REPEATS = 1
+RUN_RFE = False
+```
+
+確認沒問題後，再切回：
+
+```python
+N_SPLITS = 5
+N_REPEATS = 1
+RUN_RFE = True
+```
+
+### 4. 模型組合
+
+Notebook 會跑 11 個 model family 的分類版本：
+
+```text
+Ridge, Linear, Lasso, SVR, KNN, RF, XGB, LGBM, CatBoost, MLP, ExtraTrees
+```
+
+這裡的設計不是追求單一模型的極限調參，而是在連線受限、不方便使用大型 AutoML 或進階 hyperparameter search 的環境下，用足夠多樣的模型 family 互相補位。最後由 `KFoldPredictor` 根據 holdout accuracy 自動換算 ensemble weights。
+
+### 5. 看結果
+
+產出：
+
+```text
+outputs/spaceship-titanic/submission_imbd_helper_all_models_rfe.csv
+```
+
+Notebook cell output 裡要看這幾個重點：
+
+- RFE 選到的特徵數與欄位
+- 每個 model family 的 CV accuracy
+- 每個 model family 的 holdout accuracy
+- `KFoldPredictor` 算出的 ensemble weights
+- 最終 holdout accuracy
+
+`submission_imbd_helper_all_models_rfe.csv` 符合 Kaggle submission 格式。README 不固定寫 leaderboard 分數，因為這個 repo 的重點是 local validation 流程，而不是事後挑一次最好看的提交結果。
+
+### 6. 換成自己的資料
+
+把自己的資料整理成三個物件：
+
+- `X`：訓練特徵，必須是 `pandas.DataFrame`
+- `y`：目標欄位，必須是 `pandas.Series`
+- `X_test`：要預測的測試特徵，欄位需與 `X` 對齊
+
+再準備 `typeofFeatures`：
+
+```text
+0 = categorical
+1 = numerical
+```
+
+範例：
+
+```python
+import pandas as pd
+
+from Data_checker import DataChecker
+from Feature_selector import FeatureSelector
+
+type_of_features = [0 if col in categorical_columns else 1 for col in X.columns]
+type_map = dict(zip(X.columns, type_of_features))
+
+checker = DataChecker(
+    X=X,
+    y=y,
+    X_test=X_test,
+    mode="class",
+    typeofFeatures=type_of_features,
+)
+checker.varify_data_types()
+checker.apply_transformations(use_target_encoder=False)
+
+selector = FeatureSelector(
+    X=checker.X,
+    y=y,
+    mode="class",
+    TypesofFeatures=list(range(1, checker.X.shape[1] + 1)),
+    cv=3,
+)
+selector.get_baseline()
+selector.get_scores_with_different_thresholds()
+X_selected, fitted_selector = selector.get_new_dataset()
+X_test_selected = pd.DataFrame(
+    fitted_selector.transform(checker.X_test),
+    columns=X_selected.columns,
+    index=checker.X_test.index,
+)
+type_of_features_selected = [type_map[col] for col in X_selected.columns]
+```
+
+接著用 `X_selected`、`X_test_selected`、`type_of_features_selected` 照 [spaceship_titanic_imbd_helper.ipynb](spaceship_titanic_imbd_helper.ipynb) 的 `train_all_model_zoo` 與 `KFoldPredictor` 區塊訓練模型、算 holdout 權重、輸出 submission。若是回歸問題，把 `mode` 改成 `"reg"`，並使用 `L1_model_zoo.py` 裡的 regressor family。
+
+### 7. 使用時的注意事項
+
+- 先用小設定確認流程，再提高 `N_SPLITS`、`N_REPEATS` 和 RFE 搜尋範圍。
+- 如果資料很多，`SVR`、`MLP`、完整 RFE 會比較慢，可以先註解掉做 smoke run。
+- 類別欄位要放進 `typeofFeatures` 的 `0`，數值欄位放 `1`。
+- 不要用 test label 或 leaderboard feedback 回頭挑特徵；最後判斷以 holdout 和 CV 穩定性為主。
 
 ---
 
@@ -148,17 +229,15 @@ outputs/spaceship-titanic/metrics.json
 
 ```text
 IMBD_helper/
-├── Data_checker.py         # 資料檢查、編碼、切分
-├── Feature_selector.py     # XGB + RFE 特徵選擇
-├── Search_hyper_params.py  # Optuna 超參數搜尋
-├── train_models.py         # 5 模型 fold 訓練
-├── Kfold_predictor.py      # Holdout 加權集成
-├── L1_model_zoo.py         # 額外 L1 模型池（stacking 用）
-├── compare_preprocess.py   # 前處理方案比較
-├── benchmark_spaceship.py  # Kaggle Spaceship Titanic 範例
+├── Data_checker.py
+├── Feature_selector.py
+├── Search_hyper_params.py
+├── train_models.py
+├── Kfold_predictor.py
+├── L1_model_zoo.py
+├── spaceship_titanic_imbd_helper.ipynb
 ├── main.py / main_lag1.py / main_z.py / main_lag1_z.py
-├── requirements.txt
-└── docs/assets/            # hero 圖與其他素材
+├── demo_datasets/
+├── docs/assets/
+└── requirements.txt
 ```
-
-
