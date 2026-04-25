@@ -7,7 +7,14 @@
 <p align="center">
   <b>Local validation and model diversity for constrained tabular ML competitions.</b>
 </p>
+<p align="center">
+  厭倦比賽不給public score了嗎? 覺得比賽很糞嗎? 沒辦法驗證感到挫敗嗎?
+</p>
+<p align="center">
+  快來試試 IMBD-Helper
+</p>
 
+---
 
 IMBD Helper 是一套表格式資料競賽用的小型 pipeline。它適合用在 public score 不可靠、看不到、或不想過度追 leaderboard 的情境：你先建立穩定的 local holdout 與 cross-validation，再用 RFE 和多模型 fold ensemble 降低單一模型偏差。
 
