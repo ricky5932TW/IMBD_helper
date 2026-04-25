@@ -13,6 +13,9 @@
 <p align="center">
   快來試試 IMBD-Helper
 </p>
+<p align="center">
+  快來試試 多屆"全國智慧製造大數據分析競賽" 得獎/入選 的策略吧
+</p>
 
 ---
 
