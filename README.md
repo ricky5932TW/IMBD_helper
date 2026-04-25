@@ -8,22 +8,6 @@
   <b>Local validation and model diversity for constrained tabular ML competitions.</b>
 </p>
 
----
-
-## 這份 README 的記憶
-
-這個 repo 的主線以 `test.ipynb`、`main.py`，以及目前整理好的 [spaceship_titanic_imbd_helper.ipynb](spaceship_titanic_imbd_helper.ipynb) 為準，不再另外編一套故事：
-
-1. 用 `DataChecker` 檢查資料、標記類別/數值欄位、建立 holdout + repeated k-fold。
-2. 用 `FeatureSelector` 做 XGBoost + RFE，先把可用特徵縮到較穩定的集合。
-3. 在每個 fold 跑大量模型 family：Ridge、Linear、Lasso、SVR、KNN、RF、XGB、LGBM、CatBoost、MLP、ExtraTrees。
-4. 用 `KFoldPredictor` 在 holdout 上算各模型表現，轉成 ensemble 權重，再預測 test set。
-
-`Serch_hyperParams` 仍可用於 Optuna 搜尋，但不是這份 notebook 的核心假設。這套流程更重視在受限連線、不能長時間依賴雲端/大型搜尋服務、或不方便反覆跑進階 hyperparameter search 的環境下，用 RFE + 多模型組合把 local validation 撐穩。
-
----
-
-## 專案定位
 
 IMBD Helper 是一套表格式資料競賽用的小型 pipeline。它適合用在 public score 不可靠、看不到、或不想過度追 leaderboard 的情境：你先建立穩定的 local holdout 與 cross-validation，再用 RFE 和多模型 fold ensemble 降低單一模型偏差。
 
